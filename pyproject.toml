@@ -10,7 +10,16 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["onnxruntime>=1.20", "numpy>=1.26", "pillow>=11", "mcp>=1.26,<2"]
+dependencies = [
+  "onnxruntime>=1.20",
+  "numpy>=1.26",
+  "pillow>=11",
+  "mcp>=1.26,<2",
+  "typing-extensions>=4.5",
+]
+
+[project.optional-dependencies]
+heic = ["pillow-heif>=1.0"]
 
 [project.scripts]
 faintmark = "faintmark.cli:main"

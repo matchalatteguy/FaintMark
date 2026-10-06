@@ -1,3 +1,5 @@
-"""FaintMark: local recipient-specific image watermarks."""
+"""FaintMark: invisible per-recipient image watermarks."""
 
-__version__ = "0.1.0"
+from importlib.metadata import version
+
+__version__ = version("faintmark")

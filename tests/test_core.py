@@ -1,185 +1,160 @@
-import hashlib
-import zipfile
+import re
+from io import BytesIO
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, JpegImagePlugin
 
 from faintmark.core import FaintMark
-from faintmark.engine import Engine
-
-
-class Stub:
-    def encode(self, image, value):
-        data = value.to_bytes(5, "big")
-        for x, byte in enumerate(data):
-            image.putpixel((x, 0), (byte, 0, 0))
-        return image
-
-    def decode(self, image):
-        return int.from_bytes(bytes(image.getpixel((x, 0))[0] for x in range(5)), "big")
 
 
 @pytest.fixture
-def setup(tmp_path):
-    source = tmp_path / "original.png"
-    Image.new("RGB", (64, 64), "white").save(source)
-    return FaintMark(tmp_path / "private", engine=Stub()), source, tmp_path / "out"
+def app(home):
+    return FaintMark()
 
 
-def test_mark_isolation_original_backup(setup, tmp_path):
-    app, source, output = setup
-    original = source.read_bytes()
-    result = app.mark(source, ["A / person", "A / person"], output, preflight=False)
-    assert source.read_bytes() == original
-    assert result["original_sha256"] == hashlib.sha256(original).hexdigest()
-    assert len({x["copy_id"] for x in result["copies"]}) == 2
-    assert all(len(x["copy_id"]) == 10 for x in result["copies"])
-    assert result["output_dir"] == str(output)
-    assert "zip_path" not in result
-    assert len(list(output.iterdir())) == 2
-    assert all(path.suffix == ".png" for path in output.iterdir())
+@pytest.mark.parametrize(
+    "name, save, fmt, suffix",
+    [
+        ("photo.jpg", {"quality": 85, "subsampling": 0}, None, ".jpg"),
+        ("photo.png", {}, None, ".png"),
+        ("photo.webp", {"quality": 80}, None, ".webp"),
+        ("photo.jpg", {"format": "MPO", "quality": 85}, None, ".jpg"),
+        ("photo.jpg", {"quality": 85}, "png", ".png"),
+    ],
+)
+def test_output_keeps_the_source_format(app, make_image, icc, name, save, fmt, suffix):
+    source = make_image(name, icc_profile=icc, **save)
+    result = app.mark(source, ["alice", "bob"], format=fmt)
+
+    assert result["original"] == name
+    assert result["output_dir"] == str(source.parent.resolve() / "marked")
     copy = result["copies"][0]
-    assert app.check(copy["path"])["recipient"] == "A / person"
-    isolated = FaintMark(tmp_path / "other", engine=Stub())
-    assert isolated.check(copy["path"])["status"] == "unknown"
-    assert isolated.check(copy["path"])["recipient"] is None
-    backup = app.backup(tmp_path / "backup.zip")
-    with zipfile.ZipFile(backup) as z:
-        assert "registry.sqlite3" in z.namelist()
-        assert any(x.startswith("thumbnails/") for x in z.namelist())
-        assert all("models" not in x and "original.png" not in x for x in z.namelist())
+    path = Path(copy["path"])
+    assert re.fullmatch(r"[0-9a-f]{10}", copy["id"])
+    assert path.name == f"photo-alice-{copy['id']}{suffix}"
+    with Image.open(path) as saved:
+        assert saved.format == {".jpg": "JPEG", ".png": "PNG", ".webp": "WEBP"}[suffix]
+        assert saved.info["icc_profile"] == icc
+        if suffix == ".jpg":
+            with Image.open(source) as original:
+                assert saved.quantization == original.quantization
+                assert JpegImagePlugin.get_sampling(saved) == JpegImagePlugin.get_sampling(original)
+            if "format" not in save:  # an MPO source file holds two frames
+                assert 0.5 < path.stat().st_size / source.stat().st_size < 1.3
+    assert copy["warnings"] == ["may not survive resizing to 64px"]
+    checked = app.check(path)
+    assert (checked["status"], checked["recipient"], checked["id"]) == (
+        "matched",
+        "alice",
+        copy["id"],
+    )
+
+
+def test_transparency_is_rejected_and_opaque_alpha_is_dropped(app, tmp_path):
+    seethrough = Image.new("RGBA", (128, 96), (10, 20, 30, 255))
+    seethrough.putpixel((5, 5), (10, 20, 30, 254))
+    seethrough.save(tmp_path / "clear.png")
+    with pytest.raises(ValueError, match="^clear.png: has transparency; flatten it first$"):
+        app.mark(tmp_path / "clear.png", ["alice"])
+
+    Image.new("RGBA", (128, 96), (10, 20, 30, 255)).save(tmp_path / "opaque.png")
+    copy = app.mark(tmp_path / "opaque.png", ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as saved:
+        assert saved.mode == "RGB"
+
+
+def test_check_reports_each_status(app, make_image, tmp_path, monkeypatch):
+    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+
+    matched = app.check(copy["path"])
+    assert matched.pop("marked_at").endswith("Z")
+    assert matched == {
+        "status": "matched",
+        "id": copy["id"],
+        "recipient": "alice",
+        "original": "photo.png",
+        "path": copy["path"],
+    }
+    other = FaintMark(tmp_path / "other")
+    assert other.check(copy["path"]) == {"status": "unregistered", "id": copy["id"]}
+    monkeypatch.setattr(app.engine, "decode", lambda image: None)
+    assert app.check(copy["path"]) == {"status": "not_detected"}
+
+
+def test_existing_files_are_never_overwritten(app, make_image, monkeypatch):
+    source = make_image("photo.png")
+    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: 0x0123456789)
+    taken = source.parent / "marked" / "photo-alice-0123456789.png"
+    taken.parent.mkdir()
+    taken.write_bytes(b"keep")
+
     with pytest.raises(FileExistsError):
-        app.backup(backup)
+        app.mark(source, ["alice"])
+    assert taken.read_bytes() == b"keep"
+    assert app.list_copies() == {"copies": []}
 
 
-def test_rollback(setup):
-    app, source, output = setup
-    app.engine.decode = lambda image: None
-    with pytest.raises(RuntimeError):
-        app.mark(source, ["Person"], output)
-    assert app.list_copies() == []
-    assert list(output.iterdir()) == []
-    assert list((app.home / "thumbnails").iterdir()) == []
-    assert app.check(source)["status"] == "inconclusive"
+def test_failed_verification_registers_nothing_and_removes_files(app, make_image, monkeypatch):
+    source = make_image("photo.png")
+    marked = source.parent / "marked"
+    encode = app.engine.encode
+
+    def encode_second_copy_unmarked(image, value):
+        written = list(marked.iterdir())
+        if written:
+            assert len(written) == 1  # alice's copy was written before bob's fails
+            return image
+        return encode(image, value)
+
+    monkeypatch.setattr(app.engine, "encode", encode_second_copy_unmarked)
+    with pytest.raises(RuntimeError, match="^photo.png: watermark could not be verified"):
+        app.mark(source, ["alice", "bob"])
+
+    assert list(marked.iterdir()) == []
+    assert app.list_copies() == {"copies": []}
 
 
-def test_reject_alpha(setup):
-    app, source, output = setup
-    Image.new("RGBA", (64, 64)).save(source)
-    with pytest.raises(ValueError, match="Transparent"):
-        app.mark(source, ["Person"], output)
+def test_ids_drawn_twice_in_one_batch_are_redrawn(app, make_image, monkeypatch):
+    draws = iter([7, 7, 8])
+    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: next(draws))
+    copies = app.mark(make_image("photo.png"), ["alice", "bob"])["copies"]
+    assert [copy["id"] for copy in copies] == ["0000000007", "0000000008"]
 
 
-def test_preflight_reports_real_failures(setup):
-    app, source, output = setup
-    result = app.mark(source, ["Person"], output)
-    assert result["copies"][0]["warnings"]
+def test_jpeg_is_resaved_at_quality_95_when_verification_fails(app, make_image, monkeypatch):
+    source = make_image("photo.jpg", quality=60, subsampling=2)
+    decode = app.engine.decode
+    calls = []
+
+    def fail_first(image):
+        calls.append(image)
+        return None if len(calls) == 1 else decode(image)
+
+    monkeypatch.setattr(app.engine, "decode", fail_first)
+    copy = app.mark(source, ["alice"])["copies"][0]
+
+    reference = BytesIO()
+    Image.new("RGB", (8, 8)).save(reference, format="JPEG", quality=95)
+    with Image.open(copy["path"]) as saved, Image.open(reference) as q95:
+        assert saved.quantization == q95.quantization
 
 
-def test_input_limits_before_inference(setup):
-    app, source, output = setup
-    with pytest.raises(ValueError, match="100 recipients"):
-        app.mark(source, ["Person"] * 101, output)
-    with pytest.raises(ValueError, match="200 characters"):
-        app.mark(source, ["x" * 201], output)
+def test_input_limits(app, make_image, tmp_path, monkeypatch):
+    source = make_image("photo.png")
+    copy = app.mark(source, ["alice"])["copies"][0]
 
+    for recipients in ([], ["x"] * 101):
+        with pytest.raises(ValueError, match="^give 1 to 100 recipients$"):
+            app.mark(source, recipients)
+    for recipients in (["x" * 201], ["  "]):
+        with pytest.raises(ValueError, match="^recipient names must be 1 to 200 characters$"):
+            app.mark(source, recipients)
+    Image.new("P", (8, 8)).save(tmp_path / "icon.gif")
+    with pytest.raises(ValueError, match=r"^icon.gif: unsupported format GIF; use JPEG, PNG"):
+        app.mark(tmp_path / "icon.gif", ["alice"])
 
-def test_backup_thumbnail_paths_are_portable(setup, tmp_path):
-    import sqlite3
-
-    app, source, output = setup
-    app.mark(source, ["Person"], output, preflight=False)
-    with zipfile.ZipFile(app.backup(tmp_path / "snapshot.zip")) as z:
-        database = tmp_path / "snapshot.sqlite3"
-        database.write_bytes(z.read("registry.sqlite3"))
-    with sqlite3.connect(database) as db:
-        path = db.execute("SELECT thumbnail_path FROM batches").fetchone()[0]
-        assert path.startswith("thumbnails/") and not Path(path).is_absolute()
-
-
-def test_existing_copy_is_not_overwritten(setup, monkeypatch):
-    app, source, output = setup
-    output.mkdir()
-    existing = output / "original-Person-0000000001.png"
-    existing.write_bytes(b"preserve me")
-    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: 1)
-    with pytest.raises(FileExistsError):
-        app.mark(source, ["Person"], output, preflight=False)
-    assert existing.read_bytes() == b"preserve me"
-    assert app.list_copies() == []
-    assert not list((app.home / "thumbnails").iterdir())
-
-
-def test_identifier_collisions_retry(setup, monkeypatch):
-    app, source, output = setup
-    identifiers = iter([1, 1, 2])
-    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: next(identifiers))
-    copies = app.mark(source, ["Person", "Person"], output, preflight=False)["copies"]
-    assert [copy["copy_id"] for copy in copies] == ["0000000001", "0000000002"]
-
-
-def test_manually_restored_backup_resolves_thumbnails(setup, tmp_path):
-    app, source, output = setup
-    copy = app.mark(source, ["Person"], output, preflight=False)["copies"][0]
-    restore_home = tmp_path / "restored"
-    with zipfile.ZipFile(app.backup(tmp_path / "restore.zip")) as z:
-        z.extractall(restore_home)
-    restored = FaintMark(restore_home, engine=Stub())
-    thumbnail = Path(restored.check(copy["path"])["thumbnail_path"])
-    assert thumbnail.is_relative_to(restore_home) and thumbnail.exists()
-    assert restored.list_copies()[0]["thumbnail_path"] == str(thumbnail)
-    restored._db.execute("UPDATE batches SET thumbnail_path='../outside.png'")
-    restored._db.commit()
-    with pytest.raises(ValueError, match="escapes"):
-        restored.list_copies()
-    with pytest.raises(ValueError, match="escapes"):
-        restored.check(copy["path"])
-
-
-def test_registry_version(setup, tmp_path):
-    import sqlite3
-
-    app, source, output = setup
-    assert app._db.execute("PRAGMA user_version").fetchone()[0] == 1
-    home = tmp_path / "future"
-    home.mkdir()
-    with sqlite3.connect(home / "registry.sqlite3") as db:
-        db.execute("PRAGMA user_version=2")
-    with pytest.raises(ValueError, match="Unsupported registry version 2"):
-        FaintMark(home, engine=Stub())
-
-
-def test_long_unicode_names_export_within_filesystem_limits(setup):
-    app, source, output = setup
-    renamed = source.with_name("界" * 70 + ".png")
-    source.rename(renamed)
-    copies = app.mark(renamed, ["人" * 100], output, preflight=False, create_archive=True)["copies"]
-    exported = Path(copies[0]["path"])
-    assert exported.exists()
-    assert len(exported.name.encode("utf-8")) <= 240
-    archive = next(output.glob("faintmark-*.zip"))
-    with zipfile.ZipFile(archive) as z:
-        assert z.namelist() == [exported.name]
-    assert not list(output.glob(".faintmark-*"))
-
-
-def test_streamed_archive_collision_rolls_back_without_overwrite(setup, monkeypatch):
-    app, source, output = setup
-    output.mkdir()
-    archive = output / "faintmark-fixed-batch.zip"
-    archive.write_bytes(b"preserve archive")
-    monkeypatch.setattr("faintmark.core.secrets.token_hex", lambda count: "fixed-batch")
-    with pytest.raises(FileExistsError):
-        app.mark(source, ["Person"], output, preflight=False, create_archive=True)
-    assert archive.read_bytes() == b"preserve archive"
-    assert list(output.iterdir()) == [archive]
-    assert app.list_copies() == []
-    assert not list((app.home / "thumbnails").iterdir())
-
-
-def test_engine_rejects_ids_outside_40_bits_before_loading_models(tmp_path):
-    models = tmp_path / "models"
-    with pytest.raises(ValueError):
-        Engine(models).encode(Image.new("RGB", (64, 64)), 2**40)
-    assert not models.exists()
+    monkeypatch.setattr("faintmark.core.MAX_PIXELS", 100)
+    with pytest.raises(ValueError, match="^photo.png: larger than 25 megapixels$"):
+        app.mark(source, ["alice"])
+    assert app.check(copy["path"])["status"] == "matched"

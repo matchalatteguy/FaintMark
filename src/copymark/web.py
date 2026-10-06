@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import tempfile
 import threading
@@ -167,7 +168,7 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
     @app.post("/api/mark")
     async def mark(request: Request, image: UploadFile = File(...), recipients: str = Form(...)):
         require_session(request, request.headers.get("x-copymark-token"))
-        names = [line.strip() for line in recipients.splitlines() if line.strip()]
+        names = [name.strip() for name in re.split(r"[,\r\n]+", recipients) if name.strip()]
         if not names:
             raise HTTPException(status_code=400, detail="Enter at least one recipient.")
         if len(names) > 100:

@@ -4,6 +4,7 @@ import io
 import zipfile
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -86,6 +87,32 @@ def test_mark_requires_session_token(tmp_path):
     )
     assert response.status_code == 403
     assert core.mark_calls == []
+
+
+@pytest.mark.parametrize(
+    "names",
+    ["ana, dc1, dc2", "ana\ndc1\ndc2", "ana,dc1\ndc2", "ana,\n dc1,\r\n dc2,,"],
+)
+def test_each_comma_or_line_separated_recipient_gets_its_own_image(tmp_path, names):
+    core = FakeCore()
+    client, token = client_for(tmp_path, core)
+    response = client.post(
+        "/api/mark",
+        data={"recipients": names},
+        files={"image": ("source.png", b"image", "image/png")},
+        headers={"X-CopyMark-Token": token},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert core.mark_calls[0][1] == ["ana", "dc1", "dc2"]
+    assert [copy["recipient"] for copy in result["copies"]] == ["ana", "dc1", "dc2"]
+    archive = client.get(result["download_url"])
+    with zipfile.ZipFile(io.BytesIO(archive.content)) as z:
+        assert set(z.namelist()) == {
+            "ana-0123456789.png",
+            "dc1-0123456789.png",
+            "dc2-0123456789.png",
+        }
 
 
 def test_mark_creates_archive_and_download_is_session_bound(tmp_path):

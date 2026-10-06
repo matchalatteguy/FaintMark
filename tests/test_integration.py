@@ -95,18 +95,25 @@ def test_real_web_saved_files_and_registry_interop(real_image, tmp_path):
         "/api/mark",
         headers=headers,
         files={"image": ("sample.png", real_image.read_bytes(), "image/png")},
-        data={"recipients": "Recipient 3"},
+        data={"recipients": "ana, dc1, dc2"},
     )
     assert response.status_code == 200, response.text
     result = response.json()
+    assert [copy["recipient"] for copy in result["copies"]] == ["ana", "dc1", "dc2"]
+    assert len({copy["copy_id"] for copy in result["copies"]}) == 3
     archive = client.get(result["download_url"])
     assert archive.status_code == 200
     with zipfile.ZipFile(io.BytesIO(archive.content)) as z:
-        marked = z.read(z.namelist()[0])
-    returned = client.post(
-        "/api/check", headers=headers, files={"image": ("returned.png", marked, "image/png")}
-    )
-    assert returned.json()["recipient"] == "Recipient 3"
+        assert len(z.namelist()) == 3
+        for copy in result["copies"]:
+            filename = next(name for name in z.namelist() if copy["copy_id"] in name)
+            returned = client.post(
+                "/api/check",
+                headers=headers,
+                files={"image": ("returned.png", z.read(filename), "image/png")},
+            )
+            assert returned.json()["recipient"] == copy["recipient"]
+            assert returned.json()["copy_id"] == copy["copy_id"]
     row = service.list_copies()[0]
     assert Path(row["path"]).is_file()
     assert row["original_name"] == "sample.png"

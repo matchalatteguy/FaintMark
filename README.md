@@ -20,7 +20,7 @@ After that, image processing works offline. No paid API or hosted service is use
 The Python runtime and dependencies take additional disk space.
 
 1. Drop in a JPEG or opaque PNG.
-2. Enter one recipient name per line and select **Create copies**.
+2. Enter recipient names separated by commas or new lines and select **Create copies**.
 3. Download the ZIP and send the appropriate copy.
 4. Download a shared copy, select **Check image**, and drop it in.
 

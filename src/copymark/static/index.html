@@ -56,7 +56,7 @@
         <input id="create-file" type="file" accept="image/*" aria-label="Choose an image to mark">
         <div class="field">
           <label class="field-label" for="recipients">Recipient names</label>
-          <textarea id="recipients" name="recipients" required></textarea>
+          <textarea id="recipients" name="recipients" placeholder="ana, dc1, dc2" required></textarea>
         </div>
         <button class="action" type="submit">Create copies</button>
         <div class="result" id="create-result" role="status" aria-live="polite"></div>
@@ -102,6 +102,21 @@
       }
 
       const selectedFiles = { create: null, check: null };
+      const recipientInput = document.getElementById('recipients');
+      const createButton = document.querySelector('#create-form .action');
+      function recipientNames() {
+        return recipientInput.value.split(/[,\r\n]+/).map(name => name.trim()).filter(Boolean);
+      }
+      function updateCopyCount() {
+        if (createButton.disabled) return;
+        const count = recipientNames().length;
+        createButton.textContent = count ? `Create ${count} ${count === 1 ? 'copy' : 'copies'}` : 'Create copies';
+      }
+      recipientInput.addEventListener('input', () => {
+        updateCopyCount();
+        document.getElementById('create-result').replaceChildren();
+      });
+      updateCopyCount();
       function setFile(kind, file) {
         const input = document.getElementById(`${kind}-file`);
         const content = document.getElementById(`${kind}-content`);
@@ -175,7 +190,8 @@
           result.replaceChildren();
           if (kind === 'create') {
             const status = document.createElement('span');
-            status.textContent = 'Copies ready. ';
+            const copies = data.copies || [];
+            status.textContent = `${copies.length} ${copies.length === 1 ? 'copy' : 'copies'} ready: ${copies.map(copy => copy.recipient).join(', ')}. `;
             const link = document.createElement('a');
             link.href = data.download_url;
             link.textContent = 'Download ZIP';
@@ -198,6 +214,7 @@
         } finally {
           button.disabled = false;
           button.textContent = kind === 'create' ? 'Create copies' : 'Check image';
+          if (kind === 'create') updateCopyCount();
         }
       }
       document.getElementById('create-form').addEventListener('submit', event => { event.preventDefault(); submit(event.currentTarget, 'create'); });

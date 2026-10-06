@@ -15,9 +15,8 @@ import pytest
 
 
 class FakeFaintMark:
-    def __init__(self, home: str | None = None, device: str = "auto") -> None:
+    def __init__(self, home: str | None = None) -> None:
         self.home = home
-        self.device = device
         self.calls: list[tuple[str, Any]] = []
 
     def mark(
@@ -67,8 +66,8 @@ def cli(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, list[FakeFaintMark]]:
     instances: list[FakeFaintMark] = []
 
     class FakeFactory(FakeFaintMark):
-        def __init__(self, home: str | None = None, device: str = "auto") -> None:
-            super().__init__(home, device)
+        def __init__(self, home: str | None = None) -> None:
+            super().__init__(home)
             instances.append(self)
 
     core_module = types.ModuleType("faintmark.core")
@@ -106,8 +105,6 @@ def test_mark_combines_recipients_and_emits_clean_json(
             [
                 "--home",
                 str(tmp_path / "registry"),
-                "--device",
-                "cpu",
                 "mark",
                 str(tmp_path / "input.png"),
                 "--recipients",
@@ -130,7 +127,7 @@ def test_mark_combines_recipients_and_emits_clean_json(
     ]
     assert "simulated model status" in stderr.getvalue()
     instance = instances[0]
-    assert (instance.home, instance.device) == (str(tmp_path / "registry"), "cpu")
+    assert instance.home == str(tmp_path / "registry")
     assert instance.calls[0][1][1:] == (
         ["recipient_1", "recipient_2", "recipient_3"],
         tmp_path / "out",

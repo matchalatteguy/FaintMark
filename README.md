@@ -6,7 +6,7 @@ registry.
 
 ## Start
 
-Requires Python 3.11–3.13 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Clone and install:
 
 ```sh
@@ -14,6 +14,9 @@ git clone https://github.com/matchalatteguy/FaintMark.git
 cd FaintMark
 uv sync --locked
 ```
+
+The models are about 65 MB of ONNX files downloaded from Adobe on first use and
+verified by SHA-256.
 
 ## CLI
 
@@ -68,19 +71,19 @@ default. MCP tool calls access local files and do not send images to platforms.
 ## Development
 
 ```sh
-uv sync --locked --extra dev
-uv run --extra dev pytest
-uv run --extra dev ruff check src tests
+uv sync --locked
+uv run pytest
+uv run ruff check src tests
 ```
 
 The normal tests use a small injected engine and exercise registry isolation,
 export verification/rollback, input limits, CLI, and real MCP protocol.
-Run the optional real-model smoke tests after downloading models:
+Run the optional real-model tests (they download the models on first use):
 
 ```sh
-FAINTMARK_INTEGRATION=1 uv run --extra dev pytest -m integration
+FAINTMARK_INTEGRATION=1 uv run pytest -m integration
 ```
 
-No recipient databases, original images, exports or checkpoints belong in commits.
+No recipient databases, original images, exports or model files belong in commits.
 
 MIT licensed.

@@ -42,10 +42,15 @@ def test_roundtrip_is_nearly_invisible(engine):
         assert 0 < diff.mean() < 6
 
 
-def test_wide_image_uses_the_centre_square(engine):
-    marked = engine.encode(noise(1200, 400), IDS[0])
+def test_wide_image_marks_only_the_centre_square(engine):
+    cover = noise(1200, 400)
+    marked = engine.encode(cover, IDS[0])
     assert marked.size == (1200, 400)
     assert engine.decode(marked) == IDS[0]
+    before, after = np.asarray(cover), np.asarray(marked)
+    assert np.array_equal(before[:, :400], after[:, :400])
+    assert np.array_equal(before[:, 800:], after[:, 800:])
+    assert not np.array_equal(before[:, 400:800], after[:, 400:800])
 
 
 def test_survives_jpeg_and_downscaling(engine):

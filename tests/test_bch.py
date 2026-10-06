@@ -24,9 +24,8 @@ def test_corrects_eight_flipped_bits():
             assert decode(flip(encode(data), 8, rng)) == (data, True)
 
 
-def test_twelve_flipped_bits_are_never_read_as_the_original():
+def test_nine_flipped_bits_are_rejected():
     rng = random.Random(3)
     for data in IDS:
         for _ in range(20):
-            decoded, ok = decode(flip(encode(data), 12, rng))
-            assert not (ok and decoded == data)
+            assert decode(flip(encode(data), 9, rng))[1] is False

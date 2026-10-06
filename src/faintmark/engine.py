@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -105,14 +106,18 @@ def _session(path):
 class Engine:
     def __init__(self, models_dir: Path):
         self.models_dir = models_dir
-        self._encoder = self._decoder = None
+        self._sessions_cache = None
+        self._load_lock = threading.Lock()
 
     def _sessions(self):
-        if self._encoder is None:
-            directory = ensure_models(self.models_dir)
-            self._encoder = _session(directory / "encoder_Q.onnx")
-            self._decoder = _session(directory / "decoder_Q.onnx")
-        return self._encoder, self._decoder
+        with self._load_lock:
+            if self._sessions_cache is None:
+                directory = ensure_models(self.models_dir)
+                self._sessions_cache = (
+                    _session(directory / "encoder_Q.onnx"),
+                    _session(directory / "decoder_Q.onnx"),
+                )
+        return self._sessions_cache
 
     def encode(self, image: Image.Image, copy_id: int) -> Image.Image:
         if not isinstance(copy_id, int) or not 0 <= copy_id < 2**40:

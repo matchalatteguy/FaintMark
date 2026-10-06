@@ -37,7 +37,7 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
     original = source.read_bytes()
     home = tmp_path / "home"
     output = tmp_path / "copies"
-    prefix = [sys.executable, "-m", "faintmark", "--home", str(home), "--device", "cpu"]
+    prefix = [sys.executable, "-m", "faintmark", "--home", str(home)]
     result = subprocess.run(
         prefix
         + [
@@ -96,7 +96,7 @@ def test_real_mcp_mark_and_check(real_image, tmp_path):
     async def exercise():
         params = StdioServerParameters(
             command=sys.executable,
-            args=["-m", "faintmark", "--home", str(tmp_path / "home"), "--device", "cpu", "mcp"],
+            args=["-m", "faintmark", "--home", str(tmp_path / "home"), "mcp"],
         )
         async with stdio_client(params) as (reader, writer):
             async with ClientSession(reader, writer) as session:

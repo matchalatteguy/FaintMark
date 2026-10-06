@@ -15,15 +15,15 @@ from pathlib import Path
 
 from PIL import Image, ImageCms, ImageOps
 
-from .engine import TrustMarkEngine
+from .engine import Engine
 
 
 class FaintMark:
-    def __init__(self, home=None, device="auto", engine=None):
+    def __init__(self, home=None, engine=None):
         self.home = Path(home or os.environ.get("FAINTMARK_HOME") or Path.home() / ".faintmark").expanduser().resolve()
         self.home.mkdir(parents=True, exist_ok=True, mode=0o700)
         (self.home / "thumbnails").mkdir(exist_ok=True, mode=0o700)
-        self.engine = engine if engine is not None else TrustMarkEngine(self.home, device)
+        self.engine = engine if engine is not None else Engine(self.home / "models")
         self._lock = threading.RLock()
         self._db = sqlite3.connect(self.home / "registry.sqlite3", check_same_thread=False)
         self._db.row_factory = sqlite3.Row

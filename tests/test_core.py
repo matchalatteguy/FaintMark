@@ -6,6 +6,7 @@ import pytest
 from PIL import Image
 
 from faintmark.core import FaintMark
+from faintmark.engine import Engine
 
 
 class Stub:
@@ -175,3 +176,10 @@ def test_streamed_archive_collision_rolls_back_without_overwrite(setup, monkeypa
     assert list(output.iterdir()) == [archive]
     assert app.list_copies() == []
     assert not list((app.home / "thumbnails").iterdir())
+
+
+def test_engine_rejects_ids_outside_40_bits_before_loading_models(tmp_path):
+    models = tmp_path / "models"
+    with pytest.raises(ValueError):
+        Engine(models).encode(Image.new("RGB", (64, 64)), 2**40)
+    assert not models.exists()

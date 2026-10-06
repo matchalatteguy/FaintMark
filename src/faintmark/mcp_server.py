@@ -9,21 +9,20 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-def _service(home: str | Path | None, device: str) -> Any:
+def _service(home: str | Path | None) -> Any:
     # Keep optional model/package output away from stdout, which is reserved for
     # MCP protocol frames when this process is launched over stdio.
     with redirect_stdout(sys.stderr):
         from .core import FaintMark
 
-        return FaintMark(home=home, device=device)
+        return FaintMark(home=home)
 
 
 def create_server(
     home: str | Path | None = None,
-    device: str = "auto",
     *,
     service: Any | None = None,
-    service_factory: Callable[[str | Path | None, str], Any] | None = None,
+    service_factory: Callable[[str | Path | None], Any] | None = None,
 ) -> Any:
     """Build the SDK server; injectable service arguments support local tests."""
     try:
@@ -39,7 +38,7 @@ def create_server(
         nonlocal current_service
         if current_service is None:
             factory = service_factory or _service
-            current_service = factory(home, device)
+            current_service = factory(home)
         return current_service
 
     @server.tool(
@@ -118,28 +117,18 @@ def create_server(
     return server
 
 
-def run_server(home: str | Path | None = None, device: str = "auto") -> None:
+def run_server(home: str | Path | None = None) -> None:
     """Run the official MCP SDK server using only its stdio transport."""
-    create_server(home=home, device=device).run(transport="stdio")
+    create_server(home=home).run(transport="stdio")
 
 
-def main(
-    argv: list[str] | None = None, *, home: str | Path | None = None, device: str = "auto"
-) -> int:
+def main(argv: list[str] | None = None, *, home: str | Path | None = None) -> int:
     """Console entry point; CLI delegation can pass resolved configuration."""
-    if home is None and device == "auto" and argv is None:
+    if home is None or argv is not None:
         parser = argparse.ArgumentParser(prog="faintmark-mcp")
         parser.add_argument("--home")
-        parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
-        args = parser.parse_args()
-        home, device = args.home, args.device
-    elif argv is not None:
-        parser = argparse.ArgumentParser(prog="faintmark-mcp")
-        parser.add_argument("--home")
-        parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
-        args = parser.parse_args(argv)
-        home, device = args.home, args.device
-    run_server(home=home, device=device)
+        home = parser.parse_args(argv).home
+    run_server(home=home)
     return 0
 
 

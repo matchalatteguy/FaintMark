@@ -19,9 +19,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--home", help="Registry and model directory (default: $FAINTMARK_HOME or ~/.faintmark)."
     )
-    parser.add_argument(
-        "--device", choices=("auto", "cpu", "mps"), default="auto", help="Inference device."
-    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     mark = commands.add_parser("mark", help="Create marked copies for recipients.")
@@ -69,7 +66,7 @@ def _service(args: argparse.Namespace) -> Any:
     with redirect_stdout(sys.stderr):
         from .core import FaintMark
 
-        return FaintMark(home=args.home, device=args.device)
+        return FaintMark(home=args.home)
 
 
 def _recipients(args: argparse.Namespace, parser: argparse.ArgumentParser) -> list[str]:
@@ -147,7 +144,7 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "mcp":
         from .mcp_server import run_server
 
-        run_server(home=args.home, device=args.device)
+        run_server(home=args.home)
         return 0
 
     service = _service(args)

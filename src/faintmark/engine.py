@@ -1,4 +1,4 @@
-"""Lazy, integrity-checked TrustMark Q inference."""
+"""TrustMark Q encoder and decoder on ONNX Runtime, with a pinned model download."""
 
 import hashlib
 import os
@@ -6,140 +6,148 @@ import shutil
 import sys
 import tempfile
 import threading
-import time
 import urllib.request
-from contextlib import redirect_stdout
 from pathlib import Path
 
-MODEL_HOST = "https://cai-watermark.adobe.net/watermarking/trustmark-models/"
+import numpy as np
+import onnxruntime as ort
+from PIL import Image
+
+from .bch import N
+from .bch import decode as bch_decode
+from .bch import encode as bch_encode
+
+MODEL_URL = "https://cai-watermark.adobe.net/watermarking/trustmark-models/"
 MODEL_HASHES = {
-    "trustmark_Q.yaml": "43f37103f92efa8bd6b1c5902bb537cc12a981dc699fca19d9bb7de8c62d03d9",
-    "decoder_Q.ckpt": "e3d9cea5406a26590735719f8f15cb10802b11852ae69047eaf4cf17214df781",
-    "encoder_Q.ckpt": "dc382c3f6b4fd568b27d6fbb763d6ffc2d2587126d84afe9d5ee95b4c5d99826",
+    "encoder_Q.onnx": "19b3d1b25836130ffd78775a8f61539f993375d1823ef0e59ba5b8dffb4f892d",
+    "decoder_Q.onnx": "ee3268f057c9dabef680e169302f5973d0589feea86189ed229a896cc3aa88df",
 }
-_LOCK = threading.RLock()
-_MODELS = {}
+ENC_RES, DEC_RES, ASPECT_LIMIT, FEATHER = 256, 256, 2.0, 0.01
 
 
-def _valid(path, digest):
-    return path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == digest
+def _sha256(path):
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def ensure_models(directory):
-    """Reuse verified installed weights, otherwise download atomically."""
-    import trustmark
-
-    directory = Path(directory)
+def ensure_models(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    bundled = Path(trustmark.__file__).parent / "models"
+    announced = False
     for name, digest in MODEL_HASHES.items():
         target = directory / name
-        if _valid(target, digest):
+        if target.is_file() and _sha256(target) == digest:
             continue
-        last = None
-        for attempt in range(3):
-            fd, temporary = tempfile.mkstemp(dir=directory, prefix=".download-")
-            try:
-                with os.fdopen(fd, "wb") as output:
-                    if _valid(bundled / name, digest):
-                        with (bundled / name).open("rb") as source:
-                            shutil.copyfileobj(source, output)
-                    else:
-                        with urllib.request.urlopen(MODEL_HOST + name, timeout=60) as source:
-                            shutil.copyfileobj(source, output)
-                if not _valid(Path(temporary), digest):
-                    raise RuntimeError(f"Model checksum mismatch: {name}")
-                os.replace(temporary, target)
-                break
-            except Exception as error:
-                last = error
-                if attempt == 2:
-                    raise RuntimeError(f"Could not obtain verified model {name}: {last}") from error
-                time.sleep(attempt + 1)
-            finally:
-                Path(temporary).unlink(missing_ok=True)
+        if not announced:
+            print("downloading TrustMark Q models (65 MB, once)...", file=sys.stderr)
+            announced = True
+        temp = tempfile.NamedTemporaryFile(dir=directory, delete=False)
+        try:
+            with temp, urllib.request.urlopen(MODEL_URL + name, timeout=60) as response:
+                shutil.copyfileobj(response, temp)
+            if _sha256(temp.name) != digest:
+                raise RuntimeError(f"model checksum mismatch: {name}")
+            os.replace(temp.name, target)
+        except BaseException:
+            Path(temp.name).unlink(missing_ok=True)
+            raise
     return directory
 
 
-class TrustMarkEngine:
-    def __init__(self, home, device="auto"):
-        self.home = Path(home)
-        self.device = device
+def _region(w, h):
+    """Left, top, right, bottom to process: the whole image, or its centre square if aspect > 2."""
+    if max(w, h) / min(w, h) > ASPECT_LIMIT:
+        s = min(w, h)
+        left, top = (w - s) // 2, (h - s) // 2
+        return left, top, left + s, top + s
+    return 0, 0, w, h
 
-    def _model(self):
-        import torch
-        from trustmark import TrustMark
-        from trustmark.trustmark import OmegaConf, instantiate_from_config
 
-        device = self.device
-        if device == "auto":
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
-        if device == "mps" and not torch.backends.mps.is_available():
-            raise ValueError("MPS is unavailable on this computer; choose auto or cpu.")
-        if device not in ("cpu", "mps"):
-            raise ValueError("Choose auto, cpu, or mps for the device.")
-        key = (str(self.home.resolve()), device)
-        if key in _MODELS:
-            return _MODELS[key]
-        models = ensure_models(self.home / "models")
+def _tensor(im):
+    """RGB PIL -> (1,3,H,W) float32 in [-1,1]; identical to torchvision ToTensor()*2-1."""
+    a = np.asarray(im, dtype=np.uint8).astype(np.float32).transpose(2, 0, 1)[None]
+    return a / np.float32(255) * np.float32(2) - np.float32(1)
 
-        class VettedTrustMark(TrustMark):
-            def load_model(self, config_path, weight_path, device, secret_len, part="all"):
-                config = OmegaConf.load(models / Path(config_path).name).model
-                replaced = (
-                    ("secret_encoder", "discriminator", "loss", "noise")
-                    if part == "decoder"
-                    else ("secret_decoder", "discriminator", "loss", "noise")
+
+def _axis(out, n):
+    half = np.float32(0.5)
+    src = np.maximum((np.arange(out, dtype=np.float32) + half) * np.float32(n / out) - half, 0)
+    i0 = np.minimum(src.astype(np.int64), n - 1)
+    return i0, np.minimum(i0 + 1, n - 1), (src - i0).astype(np.float32)
+
+
+def _resize(x, h, w):
+    """torch.nn.functional.interpolate(mode='bilinear', align_corners=False, antialias=False)."""
+    y0, y1, ly = _axis(h, x.shape[2])
+    x0, x1, lx = _axis(w, x.shape[3])
+    rows = x[:, :, y0] * (1 - ly)[:, None] + x[:, :, y1] * ly[:, None]
+    return rows[..., x0] * (1 - lx) + rows[..., x1] * lx
+
+
+def _paste(out, cover, wm, top, bottom, left, right):
+    """TrustMark.feather_paste: write wm into out[top:bottom, left:right] with a feathered edge."""
+    fs = min(max(1, int(min(right - left, bottom - top) * FEATHER)), 50)
+    out[top:bottom, left:right] = wm
+    for i in range(fs):
+        a = (i + 1) / fs
+        for row, k in ((top + i, i), (bottom - 1 - i, bottom - top - 1 - i)):
+            out[row, left:right] = a * wm[k] + (1 - a) * cover[row, left:right]
+    for i in range(fs):
+        a = (i + 1) / fs
+        for col, k in ((left + i, i), (right - 1 - i, right - left - 1 - i)):
+            out[top:bottom, col] = a * wm[:, k] + (1 - a) * cover[top:bottom, col]
+
+
+def _session(path):
+    options = ort.SessionOptions()
+    options.log_severity_level = 3
+    return ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
+
+
+class Engine:
+    def __init__(self, models_dir: Path):
+        self.models_dir = models_dir
+        self._sessions_cache = None
+        self._load_lock = threading.Lock()
+
+    def _sessions(self):
+        with self._load_lock:
+            if self._sessions_cache is None:
+                directory = ensure_models(self.models_dir)
+                self._sessions_cache = (
+                    _session(directory / "encoder_Q.onnx"),
+                    _session(directory / "decoder_Q.onnx"),
                 )
-                for component in replaced:
-                    config.params[component + "_config"].target = "trustmark.model.Identity"
-                model = instantiate_from_config(config)
-                checkpoint = torch.load(
-                    models / Path(weight_path).name, map_location="cpu", weights_only=True
-                )
-                model.load_state_dict(checkpoint.get("state_dict", checkpoint), strict=False)
-                return model.to(device).eval()
+        return self._sessions_cache
 
-        with redirect_stdout(sys.stderr):
-            model = VettedTrustMark(
-                use_ECC=True,
-                verbose=False,
-                model_type="Q",
-                encoding_type=TrustMark.Encoding.BCH_SUPER,
-                loadRemover=False,
-                device=device,
-            )
-        _MODELS[key] = model
-        return model
-
-    def _invoke(self, operation, image, **kwargs):
-        try:
-            return getattr(self._model(), operation)(image, **kwargs)
-        except RuntimeError:
-            import torch
-
-            if self.device == "auto" and torch.backends.mps.is_available():
-                self.device = "cpu"
-                return getattr(self._model(), operation)(image, **kwargs)
-            raise
-
-    def encode(self, image, copy_id):
+    def encode(self, image: Image.Image, copy_id: int) -> Image.Image:
         if not isinstance(copy_id, int) or not 0 <= copy_id < 2**40:
-            raise ValueError("Copy IDs must contain exactly 40 bits.")
-        with _LOCK:
-            return self._invoke(
-                "encode", image, string_secret=f"{copy_id:040b}", MODE="binary", WM_STRENGTH=1.0
-            )
+            raise ValueError("copy_id must be an int in [0, 2**40)")
+        encoder, _ = self._sessions()
+        # 96 codeword bits + 4 schema bits (BCH_SUPER = 0)
+        bits = [int(c) for c in format(bch_encode(copy_id), f"0{N}b")] + [0, 0, 0, 0]
+        secret = np.array([bits], dtype=np.float32)
+        box = _region(*image.size)
+        crop = image.crop(box)
+        w, h = crop.size
+        cover = _tensor(crop.resize((ENC_RES, ENC_RES), Image.BILINEAR))
+        inputs = dict(zip((i.name for i in encoder.get_inputs()), (cover, secret)))
+        stego = encoder.run(None, inputs)[0]
+        residual = np.clip(stego, -1, 1) - cover
+        # remove per-channel colour shift
+        residual = residual - residual.mean(axis=(2, 3), keepdims=True)
+        residual = _resize(residual, h, w)[0].transpose(1, 2, 0).astype(np.float32)
+        marked = np.clip(residual + np.array(crop) / 127.5 - 1.0, -1, 1) * 127.5 + 127.5  # float64
+        base = np.asarray(image, dtype=np.uint8)
+        out = base.copy()
+        left, top, right, bottom = box
+        _paste(out, base, marked, top, bottom, left, right)  # assignment into uint8 truncates
+        return Image.fromarray(out)
 
-    def decode(self, image):
-        with _LOCK:
-            bits, detected, schema = self._invoke("decode", image, MODE="binary")
-            if (
-                not detected
-                or schema != 0
-                or not isinstance(bits, str)
-                or len(bits) != 40
-                or set(bits) - {"0", "1"}
-            ):
-                return None
-            return int(bits, 2)
+    def decode(self, image: Image.Image) -> int | None:
+        _, decoder = self._sessions()
+        crop = image.crop(_region(*image.size)).resize((DEC_RES, DEC_RES), Image.BILINEAR)
+        bits = decoder.run(None, {decoder.get_inputs()[0].name: _tensor(crop)})[0][0] > 0
+        if bits[98] or bits[99]:  # schema bits must be 00
+            return None
+        data, ok = bch_decode(int("".join("1" if b else "0" for b in bits[:N]), 2))
+        return data if ok else None

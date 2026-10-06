@@ -1,0 +1,29 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.14" }
+          - { os: macos-latest, python: "3.13" }
+          - { os: windows-latest, python: "3.12" }
+    runs-on: ${{ matrix.os }}
+    env:
+      FAINTMARK_HOME: ${{ github.workspace }}/.faintmark
+      FAINTMARK_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with: { python-version: "${{ matrix.python }}" }
+      - uses: actions/cache@v6
+        with:
+          path: .faintmark/models
+          key: trustmark-q-onnx-19b3d1b2-ee3268f0
+      - run: uv sync --locked
+      - run: uv run ruff check src tests
+      - run: uv run pytest -q

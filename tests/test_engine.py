@@ -1,36 +1,63 @@
+import os
+from io import BytesIO
+from pathlib import Path
+
+import numpy as np
 import pytest
 from PIL import Image
 
-from faintmark.engine import TrustMarkEngine
+from faintmark.engine import Engine
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        os.environ.get("FAINTMARK_INTEGRATION") != "1", reason="needs the TrustMark models"
+    ),
+]
+IDS = [0x0123456789, 0xFEDCBA9876]
 
 
-class Decoder:
-    result = ("0" * 40, True, 0)
-
-    def decode(self, image, **kwargs):
-        return self.result
+@pytest.fixture(scope="module")
+def engine():
+    return Engine(Path(os.environ.get("FAINTMARK_HOME", Path.home() / ".faintmark")) / "models")
 
 
-@pytest.mark.parametrize(
-    "result,expected",
-    [
-        (("0" * 39 + "1", True, 0), 1),
-        (("0" * 40, False, 0), None),
-        (("0" * 40, True, 1), None),
-        (("0" * 39, True, 0), None),
-        (("x" * 40, True, 0), None),
-    ],
-)
-def test_decode_requires_corrected_exact_schema(tmp_path, result, expected):
-    engine = TrustMarkEngine(tmp_path)
-    decoder = Decoder()
-    decoder.result = result
-    engine._model = lambda: decoder
-    assert engine.decode(Image.new("RGB", (32, 32))) == expected
+def noise(width, height):
+    rng = np.random.default_rng(42)
+    return Image.fromarray(rng.integers(40, 220, (height, width, 3), dtype=np.uint8))
 
 
-def test_invalid_identifier_fails_before_loading(tmp_path):
-    engine = TrustMarkEngine(tmp_path)
-    engine._model = lambda: pytest.fail("Should remain lazy")
-    with pytest.raises(ValueError):
-        engine.encode(Image.new("RGB", (32, 32)), 2**40)
+def jpeg70(image):
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=70)
+    return Image.open(buffer).convert("RGB")
+
+
+def test_roundtrip_is_nearly_invisible(engine):
+    cover = noise(512, 512)
+    for copy_id in IDS:
+        marked = engine.encode(cover, copy_id)
+        assert engine.decode(marked) == copy_id
+        diff = np.abs(np.asarray(marked, dtype=int) - np.asarray(cover, dtype=int))
+        assert 0 < diff.mean() < 6
+
+
+def test_wide_image_marks_only_the_centre_square(engine):
+    cover = noise(1200, 400)
+    marked = engine.encode(cover, IDS[0])
+    assert marked.size == (1200, 400)
+    assert engine.decode(marked) == IDS[0]
+    before, after = np.asarray(cover), np.asarray(marked)
+    assert np.array_equal(before[:, :400], after[:, :400])
+    assert np.array_equal(before[:, 800:], after[:, 800:])
+    assert not np.array_equal(before[:, 400:800], after[:, 400:800])
+
+
+def test_survives_jpeg_and_downscaling(engine):
+    marked = engine.encode(noise(512, 512), IDS[0])
+    assert engine.decode(jpeg70(marked)) == IDS[0]
+    assert engine.decode(jpeg70(marked.resize((256, 256), Image.LANCZOS))) == IDS[0]
+
+
+def test_unmarked_image_is_not_detected(engine):
+    assert engine.decode(noise(512, 512)) is None

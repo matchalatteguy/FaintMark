@@ -59,10 +59,6 @@ def _parser() -> argparse.ArgumentParser:
     backup = commands.add_parser("backup", help="Export the local registry to a ZIP archive.")
     backup.add_argument("output", type=Path)
 
-    serve = commands.add_parser("serve", help="Start the local web interface.")
-    serve.add_argument("--port", type=int, default=8765)
-    serve.add_argument("--no-open", action="store_true", help="Do not open a browser window.")
-
     commands.add_parser("mcp", help="Run the local MCP stdio server.")
     return parser
 
@@ -152,11 +148,6 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         from .mcp_server import run_server
 
         run_server(home=args.home, device=args.device)
-        return 0
-    if args.command == "serve":
-        from .web import serve
-
-        serve(home=args.home, device=args.device, port=args.port, open_browser=not args.no_open)
         return 0
 
     service = _service(args)

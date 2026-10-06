@@ -16,12 +16,11 @@ from pathlib import Path
 from PIL import Image, ImageCms, ImageOps
 
 from .engine import TrustMarkEngine
-from .paths import resolve_home
 
 
 class FaintMark:
     def __init__(self, home=None, device="auto", engine=None):
-        self.home = resolve_home(home)
+        self.home = Path(home or os.environ.get("FAINTMARK_HOME") or Path.home() / ".faintmark").expanduser().resolve()
         self.home.mkdir(parents=True, exist_ok=True, mode=0o700)
         (self.home / "thumbnails").mkdir(exist_ok=True, mode=0o700)
         self.engine = engine if engine is not None else TrustMarkEngine(self.home, device)

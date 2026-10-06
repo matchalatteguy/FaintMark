@@ -1,20 +1,13 @@
 # Contributing
 
-FaintMark is a local, free tool. Keep the CLI, MCP tools and web interface on the
-same core operations. Keep originals unchanged and recipient data out of Git.
+FaintMark is a local, free tool. Keep the CLI and MCP tools on the same
+core operations. Keep originals unchanged and recipient data out of Git.
 
 ```sh
 uv sync --extra dev
 uv run --extra dev pytest
 uv run --extra dev ruff check src tests
 ```
-
-For a new platform, use the workflow in [the QA matrix](docs/QA.md). Record the
-platform, client, date, send/download settings, final dimensions and exact copy
-ID result. Use images you can share, and obtain approval before publishing any
-image, recipient label or private registry. Submit anonymized results and a
-reproducible transformation profile; a platform name alone is not a robustness
-guarantee.
 
 For an engine change, add a small, reproducible comparison of complete ID
 recovery, false matches and visual quality. Do not accept a nearest ID when

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-def _copy_mark(home: str | Path | None, device: str) -> Any:
+def _service(home: str | Path | None, device: str) -> Any:
     # Keep optional model/package output away from stdout, which is reserved for
     # MCP protocol frames when this process is launched over stdio.
     with redirect_stdout(sys.stderr):
@@ -38,7 +38,7 @@ def create_server(
     def get_service() -> Any:
         nonlocal current_service
         if current_service is None:
-            factory = service_factory or _copy_mark
+            factory = service_factory or _service
             current_service = factory(home, device)
         return current_service
 

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>CopyMark</title>
+  <style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202124; background: #f7f7f5; font-synthesis: none; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    main { width: min(100% - 32px, 560px); margin: 0 auto; padding: 52px 0 64px; }
+    h1 { margin: 0 0 28px; font-size: 27px; line-height: 1.15; font-weight: 650; letter-spacing: -.035em; }
+    .tabs { display: flex; gap: 24px; border-bottom: 1px solid #deded9; margin-bottom: 28px; }
+    .tab { padding: 0 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: #777; background: transparent; font: inherit; font-size: 14px; cursor: pointer; }
+    .tab[aria-selected="true"] { color: #202124; border-color: #202124; }
+    .panel[hidden] { display: none; }
+    .field-label { display: block; margin: 0 0 9px; font-size: 13px; font-weight: 600; }
+    .drop { display: flex; min-height: 152px; padding: 16px; align-items: center; justify-content: center; border: 1px dashed #b8b8b2; border-radius: 8px; background: #fff; text-align: center; }
+    .drop.dragging { border-color: #393936; background: #f0f0ed; }
+    .drop-inner { display: flex; max-width: 100%; flex-direction: column; align-items: center; gap: 8px; }
+    .drop-name { max-width: 100%; overflow: hidden; color: #555; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .drop img { display: block; max-height: 156px; max-width: 100%; border-radius: 4px; object-fit: contain; }
+    .pick { border: 0; padding: 5px 8px; color: #30302e; background: transparent; font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .pick:focus-visible, .tab:focus-visible, textarea:focus-visible, .action:focus-visible { outline: 3px solid #5375b5; outline-offset: 3px; }
+    input[type=file] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+    .field { margin-top: 24px; }
+    textarea { width: 100%; min-height: 122px; resize: vertical; padding: 12px; border: 1px solid #d4d4cf; border-radius: 6px; color: inherit; background: #fff; font: inherit; font-size: 14px; line-height: 1.5; }
+    .action { min-height: 42px; margin-top: 20px; padding: 0 17px; border: 0; border-radius: 6px; color: white; background: #252523; font: inherit; font-size: 14px; font-weight: 550; cursor: pointer; }
+    .action:disabled { color: #f7f7f5; background: #8c8c87; cursor: wait; }
+    .result { margin-top: 18px; font-size: 14px; line-height: 1.5; }
+    .result:empty { display: none; }
+    .result.error { color: #9b2c25; }
+    .result a { display: inline-block; margin-top: 10px; color: #202124; font-weight: 600; }
+    .preview { margin-top: 12px; }
+    @media (max-width: 480px) { main { padding-top: 32px; } .tabs { gap: 20px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>CopyMark</h1>
+    <div class="tabs" role="tablist" aria-label="CopyMark">
+      <button class="tab" id="tab-create" type="button" role="tab" aria-selected="true" aria-controls="panel-create" tabindex="0">Create copies</button>
+      <button class="tab" id="tab-check" type="button" role="tab" aria-selected="false" aria-controls="panel-check" tabindex="-1">Check image</button>
+    </div>
+
+    <section class="panel" id="panel-create" role="tabpanel" aria-labelledby="tab-create">
+      <form id="create-form">
+        <label class="field-label" for="create-file">Image</label>
+        <div class="drop" id="create-drop">
+          <div class="drop-inner" id="create-content">
+            <span>Drop an image here</span>
+            <button class="pick" type="button" data-picker="create-file">Choose image</button>
+          </div>
+        </div>
+        <input id="create-file" type="file" accept="image/*" aria-label="Choose an image to mark">
+        <div class="field">
+          <label class="field-label" for="recipients">Recipient names</label>
+          <textarea id="recipients" name="recipients" required></textarea>
+        </div>
+        <button class="action" type="submit">Create copies</button>
+        <div class="result" id="create-result" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="panel" id="panel-check" role="tabpanel" aria-labelledby="tab-check" hidden>
+      <form id="check-form">
+        <label class="field-label" for="check-file">Image</label>
+        <div class="drop" id="check-drop">
+          <div class="drop-inner" id="check-content">
+            <span>Drop an image here</span>
+            <button class="pick" type="button" data-picker="check-file">Choose image</button>
+          </div>
+        </div>
+        <input id="check-file" type="file" accept="image/*" aria-label="Choose an image to check">
+        <button class="action" type="submit">Check image</button>
+        <div class="result" id="check-result" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const sessionToken = __COPYMARK_SESSION_TOKEN__;
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      function selectTab(tab) {
+        for (const item of tabs) {
+          const selected = item === tab;
+          item.setAttribute('aria-selected', String(selected));
+          item.tabIndex = selected ? 0 : -1;
+          document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
+        }
+        tab.focus();
+      }
+      for (const tab of tabs) {
+        tab.addEventListener('click', () => selectTab(tab));
+        tab.addEventListener('keydown', event => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            selectTab(tabs[(tabs.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]);
+          }
+        });
+      }
+
+      const selectedFiles = { create: null, check: null };
+      function setFile(kind, file) {
+        const input = document.getElementById(`${kind}-file`);
+        const content = document.getElementById(`${kind}-content`);
+        const result = document.getElementById(`${kind}-result`);
+        selectedFiles[kind] = file || null;
+        result.textContent = '';
+        result.classList.remove('error');
+        content.replaceChildren();
+        if (!file) {
+          const prompt = document.createElement('span');
+          prompt.textContent = 'Drop an image here';
+          content.append(prompt);
+        } else {
+          const preview = document.createElement('img');
+          preview.alt = 'Selected image preview';
+          preview.src = URL.createObjectURL(file);
+          preview.addEventListener('load', () => URL.revokeObjectURL(preview.src), { once: true });
+          content.append(preview);
+          const name = document.createElement('span');
+          name.className = 'drop-name';
+          name.textContent = file.name;
+          content.append(name);
+        }
+        const picker = document.createElement('button');
+        picker.type = 'button';
+        picker.className = 'pick';
+        picker.dataset.picker = `${kind}-file`;
+        picker.textContent = file ? 'Choose another' : 'Choose image';
+        content.append(picker);
+        input.value = '';
+      }
+
+      for (const kind of ['create', 'check']) {
+        const input = document.getElementById(`${kind}-file`);
+        const drop = document.getElementById(`${kind}-drop`);
+        input.addEventListener('change', () => setFile(kind, input.files[0]));
+        for (const eventName of ['dragenter', 'dragover']) drop.addEventListener(eventName, event => {
+          event.preventDefault(); drop.classList.add('dragging');
+        });
+        for (const eventName of ['dragleave', 'drop']) drop.addEventListener(eventName, event => {
+          event.preventDefault(); drop.classList.remove('dragging');
+        });
+        drop.addEventListener('drop', event => setFile(kind, event.dataTransfer.files[0]));
+      }
+      document.addEventListener('click', event => {
+        const picker = event.target.closest('[data-picker]');
+        if (picker) document.getElementById(picker.dataset.picker).click();
+      });
+
+      async function submit(form, kind) {
+        const button = form.querySelector('.action');
+        const result = document.getElementById(`${kind}-result`);
+        const file = selectedFiles[kind];
+        result.classList.remove('error');
+        result.replaceChildren();
+        if (!file) { result.textContent = 'Choose an image first.'; result.classList.add('error'); return; }
+        const body = new FormData();
+        body.append('image', file, file.name);
+        if (kind === 'create') body.append('recipients', document.getElementById('recipients').value);
+        button.disabled = true;
+        button.textContent = kind === 'create' ? 'Creating…' : 'Checking…';
+        result.textContent = kind === 'create' ? 'Creating copies…' : 'Checking image…';
+        try {
+          const response = await fetch(`/api/${kind === 'create' ? 'mark' : 'check'}`, {
+            method: 'POST', body,
+            headers: { 'X-CopyMark-Token': sessionToken },
+            credentials: 'same-origin'
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || 'Something went wrong.');
+          result.replaceChildren();
+          if (kind === 'create') {
+            const status = document.createElement('span');
+            status.textContent = 'Copies ready. ';
+            const link = document.createElement('a');
+            link.href = data.download_url;
+            link.textContent = 'Download ZIP';
+            result.append(status, link);
+            if (data.warnings && data.warnings.length) {
+              const warnings = document.createElement('div');
+              warnings.textContent = data.warnings.join(' ');
+              result.append(warnings);
+            }
+          } else if (data.status === 'matched') {
+            result.textContent = `Matched: ${data.recipient} · ${data.copy_id}`;
+          } else if (data.status === 'unknown') {
+            result.textContent = 'Unknown copy.';
+          } else {
+            result.textContent = 'Inconclusive.';
+          }
+        } catch (error) {
+          result.textContent = error.message || 'Something went wrong.';
+          result.classList.add('error');
+        } finally {
+          button.disabled = false;
+          button.textContent = kind === 'create' ? 'Create copies' : 'Check image';
+        }
+      }
+      document.getElementById('create-form').addEventListener('submit', event => { event.preventDefault(); submit(event.currentTarget, 'create'); });
+      document.getElementById('check-form').addEventListener('submit', event => { event.preventDefault(); submit(event.currentTarget, 'check'); });
+    })();
+  </script>
+</body>
+</html>

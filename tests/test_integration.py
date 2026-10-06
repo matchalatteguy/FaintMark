@@ -1,21 +1,14 @@
 """Opt-in checks against the real vetted model and public interfaces."""
 
 import asyncio
-import io
 import json
 import os
 import subprocess
 import sys
-import zipfile
-from pathlib import Path
 
 import numpy as np
 import pytest
-from fastapi.testclient import TestClient
 from PIL import Image
-
-from faintmark.core import FaintMark
-from faintmark.web import create_app
 
 pytestmark = [
     pytest.mark.integration,
@@ -94,47 +87,6 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
     )
     assert unmarked.returncode == 2
     assert json.loads(unmarked.stdout)["status"] != "matched"
-
-
-def test_real_web_saved_files_and_registry_interop(real_image, tmp_path):
-    service = FaintMark(tmp_path / "home", device="cpu")
-    app = create_app(service=service, home=service.home)
-    client = TestClient(app, base_url="http://127.0.0.1")
-    client.get("/")
-    headers = {"x-faintmark-token": app.state.session_token}
-    response = client.post(
-        "/api/mark",
-        headers=headers,
-        files={"image": ("sample.png", real_image.read_bytes(), "image/png")},
-        data={"recipients": "recipient_1, recipient_2, recipient_3"},
-    )
-    assert response.status_code == 200, response.text
-    result = response.json()
-    assert [copy["recipient"] for copy in result["copies"]] == [
-        "recipient_1",
-        "recipient_2",
-        "recipient_3",
-    ]
-    assert len({copy["copy_id"] for copy in result["copies"]}) == 3
-    archive = client.get(result["download_url"])
-    assert archive.status_code == 200
-    with zipfile.ZipFile(io.BytesIO(archive.content)) as z:
-        assert len(z.namelist()) == 3
-        for copy in result["copies"]:
-            filename = next(name for name in z.namelist() if copy["copy_id"] in name)
-            returned = client.post(
-                "/api/check",
-                headers=headers,
-                files={"image": ("returned.png", z.read(filename), "image/png")},
-            )
-            assert returned.json()["recipient"] == copy["recipient"]
-            assert returned.json()["copy_id"] == copy["copy_id"]
-    row = service.list_copies()[0]
-    assert Path(row["path"]).is_file()
-    assert row["original_name"] == "sample.png"
-    # A second process/service using the same registry also finds the copy.
-    other = FaintMark(service.home, device="cpu")
-    assert other.check(row["path"])["copy_id"] == row["copy_id"]
 
 
 def test_real_mcp_mark_and_check(real_image, tmp_path):

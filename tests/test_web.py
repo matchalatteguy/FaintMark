@@ -82,7 +82,7 @@ def test_mark_requires_session_token(tmp_path):
     )
     response = client.post(
         "/api/mark",
-        data={"recipients": "Alex"},
+        data={"recipients": "recipient_1"},
         files={"image": ("source.png", b"image", "image/png")},
     )
     assert response.status_code == 403
@@ -91,7 +91,12 @@ def test_mark_requires_session_token(tmp_path):
 
 @pytest.mark.parametrize(
     "names",
-    ["ana, dc1, dc2", "ana\ndc1\ndc2", "ana,dc1\ndc2", "ana,\n dc1,\r\n dc2,,"],
+    [
+        "recipient_1, recipient_2, recipient_3",
+        "recipient_1\nrecipient_2\nrecipient_3",
+        "recipient_1,recipient_2\nrecipient_3",
+        "recipient_1,\n recipient_2,\r\n recipient_3,,",
+    ],
 )
 def test_each_comma_or_line_separated_recipient_gets_its_own_image(tmp_path, names):
     core = FakeCore()
@@ -104,14 +109,18 @@ def test_each_comma_or_line_separated_recipient_gets_its_own_image(tmp_path, nam
     )
     assert response.status_code == 200
     result = response.json()
-    assert core.mark_calls[0][1] == ["ana", "dc1", "dc2"]
-    assert [copy["recipient"] for copy in result["copies"]] == ["ana", "dc1", "dc2"]
+    assert core.mark_calls[0][1] == ["recipient_1", "recipient_2", "recipient_3"]
+    assert [copy["recipient"] for copy in result["copies"]] == [
+        "recipient_1",
+        "recipient_2",
+        "recipient_3",
+    ]
     archive = client.get(result["download_url"])
     with zipfile.ZipFile(io.BytesIO(archive.content)) as z:
         assert set(z.namelist()) == {
-            "ana-0123456789.png",
-            "dc1-0123456789.png",
-            "dc2-0123456789.png",
+            "recipient_1-0123456789.png",
+            "recipient_2-0123456789.png",
+            "recipient_3-0123456789.png",
         }
 
 
@@ -120,15 +129,15 @@ def test_mark_creates_archive_and_download_is_session_bound(tmp_path):
     client, token = client_for(tmp_path, core)
     response = client.post(
         "/api/mark",
-        data={"recipients": "Alex\n\nSam"},
+        data={"recipients": "recipient_1\n\nrecipient_2"},
         files={"image": ("../../source.png", b"image bytes", "image/png")},
         headers={"X-CopyMark-Token": token},
     )
     assert response.status_code == 200
     body = response.json()
-    assert [copy["recipient"] for copy in body["copies"]] == ["Alex", "Sam"]
+    assert [copy["recipient"] for copy in body["copies"]] == ["recipient_1", "recipient_2"]
     assert "path" not in body
-    assert core.mark_calls[0][1] == ["Alex", "Sam"]
+    assert core.mark_calls[0][1] == ["recipient_1", "recipient_2"]
     assert core.mark_calls[0][0].name == "source.png"
     assert core.mark_calls[0][0].parent != core.mark_calls[0][2]
     assert not core.mark_calls[0][0].exists()
@@ -137,8 +146,8 @@ def test_mark_creates_archive_and_download_is_session_bound(tmp_path):
     assert all(
         Path(copy["path"]).is_file()
         for copy in [
-            {"path": next(core.output_dirs[0].glob("Alex-*.png"))},
-            {"path": next(core.output_dirs[0].glob("Sam-*.png"))},
+            {"path": next(core.output_dirs[0].glob("recipient_1-*.png"))},
+            {"path": next(core.output_dirs[0].glob("recipient_2-*.png"))},
         ]
     )
 
@@ -146,8 +155,8 @@ def test_mark_creates_archive_and_download_is_session_bound(tmp_path):
     assert download.status_code == 200
     assert download.headers["content-type"] == "application/zip"
     assert set(zipfile.ZipFile(io.BytesIO(download.content)).namelist()) == {
-        "Alex-0123456789.png",
-        "Sam-0123456789.png",
+        "recipient_1-0123456789.png",
+        "recipient_2-0123456789.png",
     }
 
     stranger = TestClient(
@@ -162,7 +171,7 @@ def test_check_returns_only_a_match_or_simple_status(tmp_path):
         {
             "status": "matched",
             "copy_id": "a1b2c3d4e5",
-            "recipient": "Alex",
+            "recipient": "recipient_1",
             "created_at": "2026-10-06T12:00:00Z",
             "original_name": "source.png",
             "thumbnail_path": "/private/service/thumb.png",
@@ -178,7 +187,7 @@ def test_check_returns_only_a_match_or_simple_status(tmp_path):
     assert response.json() == {
         "status": "matched",
         "copy_id": "a1b2c3d4e5",
-        "recipient": "Alex",
+        "recipient": "recipient_1",
         "created_at": "2026-10-06T12:00:00Z",
         "original_name": "source.png",
     }
@@ -204,7 +213,7 @@ def test_failed_mark_and_check_clean_temporary_uploads(tmp_path):
     client, token = client_for(tmp_path, core)
     mark_response = client.post(
         "/api/mark",
-        data={"recipients": "Alex"},
+        data={"recipients": "recipient_1"},
         files={"image": ("source.png", b"image", "image/png")},
         headers={"X-CopyMark-Token": token},
     )

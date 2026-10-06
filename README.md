@@ -11,27 +11,12 @@ After cloning this repository:
 
 ```sh
 uv sync --locked
-uv run copymark serve
 ```
-
-On macOS, you can also double-click **Launch CopyMark.command** after setup.
-First use downloads about 65 MB of verified, free TrustMark Q models.
-After that, image processing works offline. No paid API or hosted service is used.
-The Python runtime and dependencies take additional disk space.
-
-1. Drop in a JPEG or opaque PNG.
-2. Enter recipient names separated by commas or new lines and select **Create copies**.
-3. Download the ZIP and send the appropriate copy.
-4. Download a shared copy, select **Check image**, and drop it in.
-
-Original files remain unchanged. Outputs are PNGs. JPEG, PNG and WebP recovered
-images can be checked. Transparency, animations and non-sRGB inputs are rejected
-for marking rather than silently changing their appearance.
 
 ## CLI
 
 ```sh
-uv run copymark mark photo.jpg --recipient Alice --recipient Bob --output ./exports
+uv run copymark mark photo.jpg --recipient recipient_1 --recipient recipient_2 --output ./exports
 uv run copymark check downloaded.jpg
 uv run copymark list
 uv run copymark backup registry-backup.zip
@@ -42,7 +27,7 @@ Use `--json` with `mark`, `check` or `list` for machine-readable results.
 You can supply a text file with one recipient per line using `--recipients-file`.
 
 ```sh
-uv run copymark --home ./my-private-registry mark photo.jpg --recipient Alice --output ./exports
+uv run copymark --home ./my-private-registry mark photo.jpg --recipient recipient_1 --output ./exports
 uv run copymark --home ./my-private-registry check downloaded.jpg --json
 ```
 
@@ -71,6 +56,26 @@ path:
 Tools: `mark_image`, `check_image`, `list_copies`, `backup_registry`.
 Supply absolute image/output paths. CLI, web and MCP share the same registry by
 default. MCP tool calls access local files and do not send images to platforms.
+
+## Local interface
+
+```sh
+uv run copymark serve
+```
+
+On macOS, you can also double-click **Launch CopyMark.command** after setup.
+First use downloads about 65 MB of verified, free TrustMark Q models.
+After that, image processing works offline. No paid API or hosted service is used.
+The Python runtime and dependencies take additional disk space.
+
+1. Drop in a JPEG or opaque PNG.
+2. Enter recipient names separated by commas or new lines and select **Create copies**.
+3. Download the ZIP and send the appropriate copy.
+4. Download a shared copy, select **Check image**, and drop it in.
+
+Original files remain unchanged. Outputs are PNGs. JPEG, PNG and WebP recovered
+images can be checked. Transparency, animations and non-sRGB inputs are rejected
+for marking rather than silently changing their appearance.
 
 ## QA
 

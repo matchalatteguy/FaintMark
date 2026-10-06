@@ -95,11 +95,15 @@ def test_real_web_saved_files_and_registry_interop(real_image, tmp_path):
         "/api/mark",
         headers=headers,
         files={"image": ("sample.png", real_image.read_bytes(), "image/png")},
-        data={"recipients": "ana, dc1, dc2"},
+        data={"recipients": "recipient_1, recipient_2, recipient_3"},
     )
     assert response.status_code == 200, response.text
     result = response.json()
-    assert [copy["recipient"] for copy in result["copies"]] == ["ana", "dc1", "dc2"]
+    assert [copy["recipient"] for copy in result["copies"]] == [
+        "recipient_1",
+        "recipient_2",
+        "recipient_3",
+    ]
     assert len({copy["copy_id"] for copy in result["copies"]}) == 3
     archive = client.get(result["download_url"])
     assert archive.status_code == 200

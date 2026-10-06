@@ -45,7 +45,7 @@ class FakeCopyMark:
         return {
             "status": "matched",
             "copy_id": "0123456789",
-            "recipient": "Casey",
+            "recipient": "recipient_1",
             "created_at": "2026-10-06T00:00:00Z",
             "original_name": "source.png",
             "thumbnail_path": "/tmp/thumbnail.png",
@@ -53,7 +53,7 @@ class FakeCopyMark:
 
     def list_copies(self, limit: int = 100) -> list[dict[str, Any]]:
         self.calls.append(("list_copies", limit))
-        return [{"copy_id": "0123456789", "recipient": "Casey", "created_at": "now"}]
+        return [{"copy_id": "0123456789", "recipient": "recipient_1", "created_at": "now"}]
 
     def backup(self, destination: Any) -> str:
         self.calls.append(("backup", destination))
@@ -98,7 +98,7 @@ def test_mark_combines_recipients_and_emits_clean_json(
 ) -> None:
     cli_module, instances = cli
     names_file = tmp_path / "recipients.txt"
-    names_file.write_text("Jordan\n\nRiley\n", encoding="utf-8")
+    names_file.write_text("recipient_2\n\nrecipient_3\n", encoding="utf-8")
     stdout, stderr = io.StringIO(), io.StringIO()
 
     with redirect_stdout(stdout), redirect_stderr(stderr):
@@ -111,7 +111,7 @@ def test_mark_combines_recipients_and_emits_clean_json(
                 "mark",
                 str(tmp_path / "input.png"),
                 "--recipient",
-                "Casey",
+                "recipient_1",
                 "--recipients-file",
                 str(names_file),
                 "--output",
@@ -123,11 +123,19 @@ def test_mark_combines_recipients_and_emits_clean_json(
 
     assert code == 0
     output = json.loads(stdout.getvalue())
-    assert [copy["recipient"] for copy in output["copies"]] == ["Casey", "Jordan", "Riley"]
+    assert [copy["recipient"] for copy in output["copies"]] == [
+        "recipient_1",
+        "recipient_2",
+        "recipient_3",
+    ]
     assert "simulated model status" in stderr.getvalue()
     instance = instances[0]
     assert (instance.home, instance.device) == (str(tmp_path / "registry"), "cpu")
-    assert instance.calls[0][1][1:] == (["Casey", "Jordan", "Riley"], tmp_path / "out", False)
+    assert instance.calls[0][1][1:] == (
+        ["recipient_1", "recipient_2", "recipient_3"],
+        tmp_path / "out",
+        False,
+    )
 
 
 @pytest.mark.parametrize("status,expected", [("matched", 0), ("unknown", 2), ("inconclusive", 2)])

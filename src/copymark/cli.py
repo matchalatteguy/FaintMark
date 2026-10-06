@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -35,6 +36,7 @@ def _parser() -> argparse.ArgumentParser:
     mark.add_argument(
         "--recipients-file", type=Path, help="Text file with one recipient name per line."
     )
+    mark.add_argument("--recipients", help="Comma-separated recipient names.")
     mark.add_argument(
         "--output",
         type=Path,
@@ -76,6 +78,10 @@ def _service(args: argparse.Namespace) -> Any:
 
 def _recipients(args: argparse.Namespace, parser: argparse.ArgumentParser) -> list[str]:
     names = list(args.recipient)
+    if args.recipients:
+        names.extend(
+            name.strip() for name in re.split(r"[,\r\n]+", args.recipients) if name.strip()
+        )
     if args.recipients_file:
         try:
             names.extend(
@@ -87,7 +93,7 @@ def _recipients(args: argparse.Namespace, parser: argparse.ArgumentParser) -> li
             parser.error(f"cannot read recipients file {args.recipients_file}: {exc}")
     names = [name.strip() for name in names if name.strip()]
     if not names:
-        parser.error("mark requires at least one --recipient or a non-empty --recipients-file")
+        parser.error("mark requires --recipients, --recipient, or a non-empty --recipients-file")
     return names
 
 
@@ -106,8 +112,8 @@ def _mark_human(result: dict[str, Any]) -> None:
         )
         for warning in copy.get("warnings", []):
             print(f"  Warning: {warning}", file=sys.stderr)
-    if result.get("zip_path"):
-        print(f"Archive: {result['zip_path']}")
+    if result.get("output_dir"):
+        print(f"Folder: {result['output_dir']}")
 
 
 def _check_human(result: dict[str, Any]) -> int:

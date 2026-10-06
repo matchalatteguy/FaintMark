@@ -44,7 +44,8 @@ def create_server(
 
     @server.tool(
         description=(
-            "Create recipient-specific marked image copies and register them locally. "
+            "Create a folder of recipient-specific PNG images and register them locally. "
+            "Returns the output folder and each image path; no ZIP archive is created. "
             "A recipient label records the intended recipient; it does not prove who posted an image. "
             "Known registered copies are matched only when the detector is confident; nearest-match guessing is avoided."
         ),

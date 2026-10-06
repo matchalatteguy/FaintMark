@@ -19,7 +19,8 @@ class FakeCore:
         self.check_calls = []
         self.output_dirs = []
 
-    def mark(self, image, recipients, output_dir, preflight=True):
+    def mark(self, image, recipients, output_dir, preflight=True, create_archive=False):
+        assert create_archive, "Only the web download requests an archive"
         self.mark_calls.append((Path(image), recipients, Path(output_dir), preflight))
         self.output_dirs.append(Path(output_dir))
         if self.fail:

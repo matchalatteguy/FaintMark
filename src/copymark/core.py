@@ -109,7 +109,7 @@ class CopyMark:
         finally:
             Path(temporary).unlink(missing_ok=True)
 
-    def mark(self, image, recipients, output_dir, preflight=True):
+    def mark(self, image, recipients, output_dir, preflight=True, create_archive=False):
         if len(recipients) > 100:
             raise ValueError("A batch supports at most 100 recipients.")
         if any(isinstance(r, str) and len(r) > 200 for r in recipients):
@@ -186,19 +186,24 @@ class CopyMark:
                         (copy_id, batch, item["recipient"], str(path), json.dumps(warnings)),
                     )
 
-                def populate_archive(archive):
-                    for item in copies:
-                        archive.write(item["path"], Path(item["path"]).name)
+                if create_archive:
 
-                self._publish_archive(zip_path, populate_archive)
-                made.append(zip_path)
+                    def populate_archive(archive):
+                        for item in copies:
+                            archive.write(item["path"], Path(item["path"]).name)
+
+                    self._publish_archive(zip_path, populate_archive)
+                    made.append(zip_path)
                 self._db.commit()
             except BaseException:
                 self._db.rollback()
                 for path in reversed(made):
                     path.unlink(missing_ok=True)
                 raise
-        return dict(batch_id=batch, original_sha256=digest, copies=copies, zip_path=str(zip_path))
+        result = dict(batch_id=batch, original_sha256=digest, copies=copies, output_dir=str(output))
+        if create_archive:
+            result["zip_path"] = str(zip_path)
+        return result
 
     def _thumbnail_path(self, value):
         path = Path(value)

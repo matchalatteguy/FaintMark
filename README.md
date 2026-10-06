@@ -16,15 +16,18 @@ uv sync --locked
 ## CLI
 
 ```sh
-uv run copymark mark photo.jpg --recipient recipient_1 --recipient recipient_2 --output ./exports
+uv run copymark mark photo.jpg --output ./exports --recipients "recipient_1,recipient_2,recipient_3"
 uv run copymark check downloaded.jpg
 uv run copymark list
 uv run copymark backup registry-backup.zip
 ```
 
 Use `--json` with `mark`, `check` or `list` for machine-readable results.
+Marking creates the output folder and saves one verified PNG per recipient;
+CLI and MCP do not create a ZIP. Their results include the folder and image paths.
 `check` exits with 0 for a match, 2 for unknown/inconclusive, and 1 for an error.
 You can supply a text file with one recipient per line using `--recipients-file`.
+Use repeated `--recipient` flags when a recipient label itself contains a comma.
 
 ```sh
 uv run copymark --home ./my-private-registry mark photo.jpg --recipient recipient_1 --output ./exports
@@ -54,6 +57,9 @@ path:
 ```
 
 Tools: `mark_image`, `check_image`, `list_copies`, `backup_registry`.
+`mark_image` takes an image path, recipient-name list and output-folder path.
+It returns the folder and individual PNG paths. ZIPs are used only for browser
+downloads and registry backups.
 Supply absolute image/output paths. CLI, web and MCP share the same registry by
 default. MCP tool calls access local files and do not send images to platforms.
 
@@ -76,6 +82,12 @@ The Python runtime and dependencies take additional disk space.
 Original files remain unchanged. Outputs are PNGs. JPEG, PNG and WebP recovered
 images can be checked. Transparency, animations and non-sRGB inputs are rejected
 for marking rather than silently changing their appearance.
+
+Exports retain the displayed pixel dimensions, with EXIF orientation normalized
+(a rotated source may swap width and height). CopyMark adds no EXIF, recipient
+names or tracking tags to the images; existing metadata is not copied to exports.
+The watermark itself changes pixel values slightly. PNG output can be substantially
+larger than a JPEG source, so original file sizes are not preserved.
 
 ## QA
 

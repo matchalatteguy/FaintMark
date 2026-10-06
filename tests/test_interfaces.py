@@ -37,7 +37,7 @@ class FakeCopyMark:
                 }
                 for recipient in recipients
             ],
-            "zip_path": f"{output_dir}/batch.zip",
+            "output_dir": str(output_dir),
         }
 
     def check(self, image: Any) -> dict[str, Any]:
@@ -98,7 +98,7 @@ def test_mark_combines_recipients_and_emits_clean_json(
 ) -> None:
     cli_module, instances = cli
     names_file = tmp_path / "recipients.txt"
-    names_file.write_text("recipient_2\n\nrecipient_3\n", encoding="utf-8")
+    names_file.write_text("\nrecipient_3\n", encoding="utf-8")
     stdout, stderr = io.StringIO(), io.StringIO()
 
     with redirect_stdout(stdout), redirect_stderr(stderr):
@@ -110,8 +110,8 @@ def test_mark_combines_recipients_and_emits_clean_json(
                 "cpu",
                 "mark",
                 str(tmp_path / "input.png"),
-                "--recipient",
-                "recipient_1",
+                "--recipients",
+                "recipient_1,recipient_2",
                 "--recipients-file",
                 str(names_file),
                 "--output",

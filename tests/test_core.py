@@ -34,6 +34,10 @@ def test_mark_isolation_original_backup(setup, tmp_path):
     assert result["original_sha256"] == hashlib.sha256(original).hexdigest()
     assert len({x["copy_id"] for x in result["copies"]}) == 2
     assert all(len(x["copy_id"]) == 10 for x in result["copies"])
+    assert result["output_dir"] == str(output)
+    assert "zip_path" not in result
+    assert len(list(output.iterdir())) == 2
+    assert all(path.suffix == ".png" for path in output.iterdir())
     copy = result["copies"][0]
     assert app.check(copy["path"])["recipient"] == "A / person"
     isolated = CopyMark(tmp_path / "other", engine=Stub())
@@ -149,7 +153,7 @@ def test_long_unicode_names_export_within_filesystem_limits(setup):
     app, source, output = setup
     renamed = source.with_name("界" * 70 + ".png")
     source.rename(renamed)
-    copies = app.mark(renamed, ["人" * 100], output, preflight=False)["copies"]
+    copies = app.mark(renamed, ["人" * 100], output, preflight=False, create_archive=True)["copies"]
     exported = Path(copies[0]["path"])
     assert exported.exists()
     assert len(exported.name.encode("utf-8")) <= 240
@@ -166,7 +170,7 @@ def test_streamed_archive_collision_rolls_back_without_overwrite(setup, monkeypa
     archive.write_bytes(b"preserve archive")
     monkeypatch.setattr("copymark.core.secrets.token_hex", lambda count: "fixed-batch")
     with pytest.raises(FileExistsError):
-        app.mark(source, ["Person"], output, preflight=False)
+        app.mark(source, ["Person"], output, preflight=False, create_archive=True)
     assert archive.read_bytes() == b"preserve archive"
     assert list(output.iterdir()) == [archive]
     assert app.list_copies() == []

@@ -6,7 +6,8 @@ consenting recipients. Keep the same CopyMark registry throughout the test.
 ## Prepare
 
 1. Start CopyMark and create five copies labelled Recipient 1 through Recipient 5.
-2. Unzip the download. Check every marked PNG locally: all five must match their
+2. CLI/MCP: use the created output folder. Web: unzip the download.
+   Check every marked PNG locally: all five must match their
    assigned label and exact ten-character copy ID.
 3. Check the unmarked original: it must not match a registered copy.
 4. Record each ID below. Send the matching file for each row; do not accidentally

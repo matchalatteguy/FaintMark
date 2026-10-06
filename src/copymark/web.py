@@ -194,7 +194,7 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
             output_dir.mkdir(mode=0o700)
             try:
                 result = await run_in_threadpool(
-                    get_service().mark, path, names, output_dir, preflight=True
+                    get_service().mark, path, names, output_dir, preflight=True, create_archive=True
                 )
                 zip_path = Path(result["zip_path"]).resolve(strict=True)
                 if not zip_path.is_file() or not zip_path.is_relative_to(export_root.resolve()):

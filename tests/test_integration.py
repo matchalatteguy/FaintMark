@@ -35,6 +35,13 @@ def real_image(tmp_path_factory):
 
 
 def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
+    source = tmp_path / "source.jpg"
+    with Image.open(real_image) as image:
+        exif = Image.Exif()
+        exif[274] = 6
+        exif[315] = "test fixture"
+        image.crop((0, 0, 384, 512)).save(source, quality=90, exif=exif)
+    original = source.read_bytes()
     home = tmp_path / "home"
     output = tmp_path / "copies"
     prefix = [sys.executable, "-m", "copymark", "--home", str(home), "--device", "cpu"]
@@ -42,11 +49,9 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
         prefix
         + [
             "mark",
-            str(real_image),
-            "--recipient",
-            "Recipient 1",
-            "--recipient",
-            "Recipient 2",
+            str(source),
+            "--recipients",
+            "recipient_1,recipient_2,recipient_3",
             "--output",
             str(output),
             "--json",
@@ -57,8 +62,14 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
         check=True,
     )
     batch = json.loads(result.stdout)
-    assert len(batch["copies"]) == 2
+    assert len(batch["copies"]) == 3
+    assert source.read_bytes() == original
+    assert batch["output_dir"] == str(output)
+    assert "zip_path" not in batch and not list(output.glob("*.zip"))
     for copy in batch["copies"]:
+        with Image.open(copy["path"]) as marked:
+            assert marked.size == (512, 384)
+            assert len(marked.getexif()) == 0 and not marked.info
         checked = subprocess.run(
             prefix + ["check", copy["path"], "--json"],
             text=True,
@@ -77,7 +88,7 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
         timeout=120,
         check=True,
     )
-    assert json.loads(checked.stdout)["recipient"] == "Recipient 1"
+    assert json.loads(checked.stdout)["recipient"] == "recipient_1"
     unmarked = subprocess.run(
         prefix + ["check", str(real_image), "--json"], text=True, capture_output=True, timeout=120
     )
@@ -149,6 +160,9 @@ def test_real_mcp_mark_and_check(real_image, tmp_path):
                 )
                 assert not created.isError, created
                 batch = created.structuredContent
+                assert "zip_path" not in batch
+                assert batch["output_dir"] == str(tmp_path / "copies")
+                assert not list((tmp_path / "copies").glob("*.zip"))
                 copy = batch["copies"][0]
                 checked = await session.call_tool("check_image", {"image_path": copy["path"]})
                 assert not checked.isError

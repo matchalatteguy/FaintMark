@@ -1,4 +1,8 @@
+import json
 import os
+import shutil
+import subprocess
+import sys
 from io import BytesIO
 from pathlib import Path
 
@@ -15,11 +19,12 @@ pytestmark = [
     ),
 ]
 IDS = [0x0123456789, 0xFEDCBA9876]
+MODELS = Path(os.environ.get("FAINTMARK_HOME", Path.home() / ".faintmark")) / "models"
 
 
 @pytest.fixture(scope="module")
 def engine():
-    return Engine(Path(os.environ.get("FAINTMARK_HOME", Path.home() / ".faintmark")) / "models")
+    return Engine(MODELS)
 
 
 def noise(width, height):
@@ -61,3 +66,40 @@ def test_survives_jpeg_and_downscaling(engine):
 
 def test_unmarked_image_is_not_detected(engine):
     assert engine.decode(noise(512, 512)) is None
+
+
+def test_cli_marks_and_traces_jpeg_copies(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    try:
+        (home / "models").symlink_to(MODELS, target_is_directory=True)
+    except OSError:
+        shutil.copytree(MODELS, home / "models")
+
+    def faintmark(*args):
+        env = {**os.environ, "FAINTMARK_HOME": str(home)}
+        run = subprocess.run(
+            [sys.executable, "-m", "faintmark", *map(str, args), "--json"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        return run.returncode, json.loads(run.stdout)
+
+    source = tmp_path / "photo.jpg"
+    noise(1200, 900).save(source, quality=85, subsampling=2)
+    code, marked = faintmark("mark", source, "alice", "bob")
+    assert code == 0
+    copies = marked["copies"]
+    assert [Path(copy["path"]).suffix for copy in copies] == [".jpg", ".jpg"]
+    for copy in copies:
+        assert 0.6 < Path(copy["path"]).stat().st_size / source.stat().st_size < 1.6
+
+    code, found = faintmark("check", copies[0]["path"])
+    assert (code, found["status"], found["recipient"]) == (0, "matched", "alice")
+    resaved = tmp_path / "resaved.jpg"
+    Image.open(copies[1]["path"]).save(resaved, quality=70)
+    code, found = faintmark("check", resaved)
+    assert (code, found["status"], found["recipient"]) == (0, "matched", "bob")
+    code, found = faintmark("check", source)
+    assert (code, found["status"]) == (1, "not_detected")

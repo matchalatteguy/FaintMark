@@ -1,11 +1,11 @@
-# CopyMark QA
+# FaintMark QA
 
 Use an image you can safely share. Use your own private test destinations or
-consenting recipients. Keep the same CopyMark registry throughout the test.
+consenting recipients. Keep the same FaintMark registry throughout the test.
 
 ## Prepare
 
-1. Start CopyMark and create five copies labelled Recipient 1 through Recipient 5.
+1. Start FaintMark and create five copies labelled Recipient 1 through Recipient 5.
 2. CLI/MCP: use the created output folder. Web: unzip the download.
    Check every marked PNG locally: all five must match their
    assigned label and exact ten-character copy ID.
@@ -46,7 +46,7 @@ from downloading an attachment; record which one you used.
 | I3 | Instagram: forward/repost recovered I1, recover again | Recipient 2 | Exact ID | | Not run |
 | X1 | WhatsApp Standard download → Discord upload/download | Recipient 1 | Exact ID | | Not run |
 | X2 | Discord download → Instagram DM → recover file | Recipient 4 | Exact ID | | Not run |
-| C1 | Restart CopyMark, check a previously matched download | Any | Same assigned ID | | Not run |
+| C1 | Restart FaintMark, check a previously matched download | Any | Same assigned ID | | Not run |
 | C2 | Check a marked image using a fresh empty `--home` | Any | Unknown; no recipient name | | Not run |
 | C3 | Back up; restore into a new empty home; check again | Any | Same assigned ID | | Not run |
 
@@ -77,7 +77,7 @@ Actual status / ID:
 Input and recovered dimensions:
 Send settings / download method:
 Forwarding or reposting steps:
-CopyMark version:
+FaintMark version:
 Preflight warnings:
 ```
 

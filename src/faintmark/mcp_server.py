@@ -1,4 +1,4 @@
-"""Official Python SDK stdio server for CopyMark."""
+"""Official Python SDK stdio server for FaintMark."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ def _copy_mark(home: str | Path | None, device: str) -> Any:
     # Keep optional model/package output away from stdout, which is reserved for
     # MCP protocol frames when this process is launched over stdio.
     with redirect_stdout(sys.stderr):
-        from .core import CopyMark
+        from .core import FaintMark
 
-        return CopyMark(home=home, device=device)
+        return FaintMark(home=home, device=device)
 
 
 def create_server(
@@ -32,7 +32,7 @@ def create_server(
     except ImportError as exc:  # pragma: no cover - exercised in CLI dependency tests
         raise RuntimeError("MCP support requires the official 'mcp' Python SDK") from exc
 
-    server = FastMCP("CopyMark")
+    server = FastMCP("FaintMark")
     current_service = service
 
     def get_service() -> Any:
@@ -72,7 +72,7 @@ def create_server(
 
     @server.tool(
         description=(
-            "Check an image against the local CopyMark registry. Returns matched, unknown, or inconclusive; "
+            "Check an image against the local FaintMark registry. Returns matched, unknown, or inconclusive; "
             "uncertain results are not assigned to the nearest known recipient."
         ),
         annotations=ToolAnnotations(
@@ -93,7 +93,7 @@ def create_server(
         ),
     )
     def list_copies(limit: int = 100) -> list[dict[str, Any]]:
-        """List entries in the local CopyMark registry."""
+        """List entries in the local FaintMark registry."""
         if limit < 0:
             raise ValueError("limit must be zero or greater")
         with redirect_stdout(sys.stderr):
@@ -101,7 +101,7 @@ def create_server(
 
     @server.tool(
         description=(
-            "Export the local CopyMark registry to a ZIP file at the requested path. "
+            "Export the local FaintMark registry to a ZIP file at the requested path. "
             "This writes an export file and does not delete registry data."
         ),
         annotations=ToolAnnotations(
@@ -128,13 +128,13 @@ def main(
 ) -> int:
     """Console entry point; CLI delegation can pass resolved configuration."""
     if home is None and device == "auto" and argv is None:
-        parser = argparse.ArgumentParser(prog="copymark-mcp")
+        parser = argparse.ArgumentParser(prog="faintmark-mcp")
         parser.add_argument("--home")
         parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
         args = parser.parse_args()
         home, device = args.home, args.device
     elif argv is not None:
-        parser = argparse.ArgumentParser(prog="copymark-mcp")
+        parser = argparse.ArgumentParser(prog="faintmark-mcp")
         parser.add_argument("--home")
         parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
         args = parser.parse_args(argv)

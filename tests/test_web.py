@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from copymark.web import create_app
+from faintmark.web import create_app
 
 
 class FakeCore:
@@ -68,12 +68,12 @@ def client_for(tmp_path, core):
 def test_page_has_session_and_is_the_simple_copy_mark_interface(tmp_path):
     client, _ = client_for(tmp_path, FakeCore())
     page = client.get("/")
-    assert "<h1>CopyMark</h1>" in page.text
+    assert "<h1>FaintMark</h1>" in page.text
     assert "Create copies" in page.text
     assert "Check image" in page.text
-    assert "__COPYMARK_SESSION_TOKEN__" not in page.text
-    cookie = client.cookies.get("copymark_session")
-    assert cookie and client.cookies.get("copymark_session") == cookie
+    assert "__FAINTMARK_SESSION_TOKEN__" not in page.text
+    cookie = client.cookies.get("faintmark_session")
+    assert cookie and client.cookies.get("faintmark_session") == cookie
 
 
 def test_mark_requires_session_token(tmp_path):
@@ -106,7 +106,7 @@ def test_each_comma_or_line_separated_recipient_gets_its_own_image(tmp_path, nam
         "/api/mark",
         data={"recipients": names},
         files={"image": ("source.png", b"image", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert response.status_code == 200
     result = response.json()
@@ -132,7 +132,7 @@ def test_mark_creates_archive_and_download_is_session_bound(tmp_path):
         "/api/mark",
         data={"recipients": "recipient_1\n\nrecipient_2"},
         files={"image": ("../../source.png", b"image bytes", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert response.status_code == 200
     body = response.json()
@@ -182,7 +182,7 @@ def test_check_returns_only_a_match_or_simple_status(tmp_path):
     response = client.post(
         "/api/check",
         files={"image": ("../../returned.png", b"returned image", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert response.status_code == 200
     assert response.json() == {
@@ -203,7 +203,7 @@ def test_unknown_and_inconclusive_are_returned_as_statuses(tmp_path):
         response = client.post(
             "/api/check",
             files={"image": ("returned.jpg", b"image", "image/jpeg")},
-            headers={"X-CopyMark-Token": token},
+            headers={"X-FaintMark-Token": token},
         )
         assert response.status_code == 200
         assert response.json() == {"status": status}
@@ -216,12 +216,12 @@ def test_failed_mark_and_check_clean_temporary_uploads(tmp_path):
         "/api/mark",
         data={"recipients": "recipient_1"},
         files={"image": ("source.png", b"image", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     check_response = client.post(
         "/api/check",
         files={"image": ("returned.png", b"image", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert mark_response.status_code == 400
     assert mark_response.json()["detail"] == "Unable to mark image"
@@ -237,7 +237,7 @@ def test_mark_rejects_empty_recipients(tmp_path):
         "/api/mark",
         data={"recipients": " \n"},
         files={"image": ("source.png", b"image", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "Enter at least one recipient."
@@ -249,7 +249,7 @@ def test_mark_enforces_core_recipient_limit(tmp_path):
         "/api/mark",
         data={"recipients": "\n".join(f"Name {index}" for index in range(101))},
         files={"image": ("source.png", b"image", "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert response.status_code == 400
     assert response.json()["detail"].startswith("Too many recipients")
@@ -261,7 +261,7 @@ def test_upload_over_limit_is_rejected_and_removed(tmp_path):
     response = client.post(
         "/api/check",
         files={"image": ("large.png", b"x" * (31 * 1024 * 1024 + 1), "image/png")},
-        headers={"X-CopyMark-Token": token},
+        headers={"X-FaintMark-Token": token},
     )
     assert response.status_code == 413
     assert response.json()["detail"].startswith("Image is too large")

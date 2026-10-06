@@ -16,15 +16,12 @@ from pathlib import Path
 from PIL import Image, ImageCms, ImageOps
 
 from .engine import TrustMarkEngine
+from .paths import resolve_home
 
 
-class CopyMark:
+class FaintMark:
     def __init__(self, home=None, device="auto", engine=None):
-        self.home = (
-            Path(home or os.environ.get("COPYMARK_HOME") or Path.home() / ".copymark")
-            .expanduser()
-            .resolve()
-        )
+        self.home = resolve_home(home)
         self.home.mkdir(parents=True, exist_ok=True, mode=0o700)
         (self.home / "thumbnails").mkdir(exist_ok=True, mode=0o700)
         self.engine = engine if engine is not None else TrustMarkEngine(self.home, device)
@@ -34,7 +31,7 @@ class CopyMark:
         version = self._db.execute("PRAGMA user_version").fetchone()[0]
         if version > 1:
             self._db.close()
-            raise ValueError(f"Unsupported registry version {version}; update CopyMark first.")
+            raise ValueError(f"Unsupported registry version {version}; update FaintMark first.")
         self._db.execute("PRAGMA user_version=1")
         self._db.executescript("""CREATE TABLE IF NOT EXISTS batches (batch_id TEXT PRIMARY KEY, original_sha256 TEXT NOT NULL, original_name TEXT NOT NULL, thumbnail_path TEXT NOT NULL, created_at TEXT NOT NULL, variant TEXT NOT NULL, schema INTEGER NOT NULL, strength REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS copies (copy_id TEXT PRIMARY KEY, batch_id TEXT NOT NULL REFERENCES batches(batch_id), recipient TEXT NOT NULL, path TEXT NOT NULL, warnings TEXT NOT NULL);""")
@@ -77,11 +74,11 @@ class CopyMark:
     def _save_exclusive(path, image):
         buffer = BytesIO()
         image.save(buffer, format="PNG")
-        CopyMark._write_exclusive(path, buffer.getvalue())
+        FaintMark._write_exclusive(path, buffer.getvalue())
 
     @staticmethod
     def _write_exclusive(path, data):
-        fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".copymark-")
+        fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".faintmark-")
         try:
             with os.fdopen(fd, "wb") as output:
                 output.write(data)
@@ -98,7 +95,7 @@ class CopyMark:
 
     @staticmethod
     def _publish_archive(path, populate):
-        fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".copymark-zip-")
+        fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".faintmark-zip-")
         os.close(fd)
         try:
             with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -124,7 +121,7 @@ class CopyMark:
         batch = secrets.token_hex(12)
         created = datetime.now(timezone.utc).isoformat()
         thumb_path = self.home / "thumbnails" / (batch + ".png")
-        zip_path = output / ("copymark-" + batch + ".zip")
+        zip_path = output / ("faintmark-" + batch + ".zip")
         made = []
         copies = []
         with self._lock:
@@ -264,7 +261,7 @@ class CopyMark:
     def backup(self, destination):
         path = Path(destination).expanduser().resolve()
         if path.is_dir():
-            path = path / f"copymark-backup-{secrets.token_hex(8)}.zip"
+            path = path / f"faintmark-backup-{secrets.token_hex(8)}.zip"
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock, tempfile.TemporaryDirectory() as temporary:
             snapshot = Path(temporary) / "registry.sqlite3"
@@ -289,7 +286,7 @@ class CopyMark:
                     "format.json",
                     json.dumps(
                         {
-                            "format": "copymark-backup",
+                            "format": "faintmark-backup",
                             "version": 1,
                             "thumbnail_paths": "thumbnails/<batch_id>.png",
                         }

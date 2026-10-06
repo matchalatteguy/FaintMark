@@ -5,6 +5,7 @@ fixtures/
 results/
 __pycache__/
 *.pyc
+.faintmark/
 .copymark/
 exports/
 marked/

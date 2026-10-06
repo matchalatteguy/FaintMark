@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>CopyMark</title>
+  <title>FaintMark</title>
   <style>
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202124; background: #f7f7f5; font-synthesis: none; }
     * { box-sizing: border-box; }
@@ -38,8 +38,8 @@
 </head>
 <body>
   <main>
-    <h1>CopyMark</h1>
-    <div class="tabs" role="tablist" aria-label="CopyMark">
+    <h1>FaintMark</h1>
+    <div class="tabs" role="tablist" aria-label="FaintMark">
       <button class="tab" id="tab-create" type="button" role="tab" aria-selected="true" aria-controls="panel-create" tabindex="0">Create copies</button>
       <button class="tab" id="tab-check" type="button" role="tab" aria-selected="false" aria-controls="panel-check" tabindex="-1">Check image</button>
     </div>
@@ -80,7 +80,7 @@
   </main>
   <script>
     (() => {
-      const sessionToken = __COPYMARK_SESSION_TOKEN__;
+      const sessionToken = __FAINTMARK_SESSION_TOKEN__;
       const tabs = [...document.querySelectorAll('[role="tab"]')];
       function selectTab(tab) {
         for (const item of tabs) {
@@ -182,7 +182,7 @@
         try {
           const response = await fetch(`/api/${kind === 'create' ? 'mark' : 'check'}`, {
             method: 'POST', body,
-            headers: { 'X-CopyMark-Token': sessionToken },
+            headers: { 'X-FaintMark-Token': sessionToken },
             credentials: 'same-origin'
           });
           const data = await response.json();

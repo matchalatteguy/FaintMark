@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from copymark.core import CopyMark
+from faintmark.core import FaintMark
 
 
 class Stub:
@@ -23,7 +23,7 @@ class Stub:
 def setup(tmp_path):
     source = tmp_path / "original.png"
     Image.new("RGB", (64, 64), "white").save(source)
-    return CopyMark(tmp_path / "private", engine=Stub()), source, tmp_path / "out"
+    return FaintMark(tmp_path / "private", engine=Stub()), source, tmp_path / "out"
 
 
 def test_mark_isolation_original_backup(setup, tmp_path):
@@ -40,7 +40,7 @@ def test_mark_isolation_original_backup(setup, tmp_path):
     assert all(path.suffix == ".png" for path in output.iterdir())
     copy = result["copies"][0]
     assert app.check(copy["path"])["recipient"] == "A / person"
-    isolated = CopyMark(tmp_path / "other", engine=Stub())
+    isolated = FaintMark(tmp_path / "other", engine=Stub())
     assert isolated.check(copy["path"])["status"] == "unknown"
     assert isolated.check(copy["path"])["recipient"] is None
     backup = app.backup(tmp_path / "backup.zip")
@@ -102,7 +102,7 @@ def test_existing_copy_is_not_overwritten(setup, monkeypatch):
     output.mkdir()
     existing = output / "original-Person-0000000001.png"
     existing.write_bytes(b"preserve me")
-    monkeypatch.setattr("copymark.core.secrets.randbits", lambda bits: 1)
+    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: 1)
     with pytest.raises(FileExistsError):
         app.mark(source, ["Person"], output, preflight=False)
     assert existing.read_bytes() == b"preserve me"
@@ -113,7 +113,7 @@ def test_existing_copy_is_not_overwritten(setup, monkeypatch):
 def test_identifier_collisions_retry(setup, monkeypatch):
     app, source, output = setup
     identifiers = iter([1, 1, 2])
-    monkeypatch.setattr("copymark.core.secrets.randbits", lambda bits: next(identifiers))
+    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: next(identifiers))
     copies = app.mark(source, ["Person", "Person"], output, preflight=False)["copies"]
     assert [copy["copy_id"] for copy in copies] == ["0000000001", "0000000002"]
 
@@ -124,7 +124,7 @@ def test_manually_restored_backup_resolves_thumbnails(setup, tmp_path):
     restore_home = tmp_path / "restored"
     with zipfile.ZipFile(app.backup(tmp_path / "restore.zip")) as z:
         z.extractall(restore_home)
-    restored = CopyMark(restore_home, engine=Stub())
+    restored = FaintMark(restore_home, engine=Stub())
     thumbnail = Path(restored.check(copy["path"])["thumbnail_path"])
     assert thumbnail.is_relative_to(restore_home) and thumbnail.exists()
     assert restored.list_copies()[0]["thumbnail_path"] == str(thumbnail)
@@ -146,7 +146,7 @@ def test_registry_version(setup, tmp_path):
     with sqlite3.connect(home / "registry.sqlite3") as db:
         db.execute("PRAGMA user_version=2")
     with pytest.raises(ValueError, match="Unsupported registry version 2"):
-        CopyMark(home, engine=Stub())
+        FaintMark(home, engine=Stub())
 
 
 def test_long_unicode_names_export_within_filesystem_limits(setup):
@@ -157,18 +157,18 @@ def test_long_unicode_names_export_within_filesystem_limits(setup):
     exported = Path(copies[0]["path"])
     assert exported.exists()
     assert len(exported.name.encode("utf-8")) <= 240
-    archive = next(output.glob("copymark-*.zip"))
+    archive = next(output.glob("faintmark-*.zip"))
     with zipfile.ZipFile(archive) as z:
         assert z.namelist() == [exported.name]
-    assert not list(output.glob(".copymark-*"))
+    assert not list(output.glob(".faintmark-*"))
 
 
 def test_streamed_archive_collision_rolls_back_without_overwrite(setup, monkeypatch):
     app, source, output = setup
     output.mkdir()
-    archive = output / "copymark-fixed-batch.zip"
+    archive = output / "faintmark-fixed-batch.zip"
     archive.write_bytes(b"preserve archive")
-    monkeypatch.setattr("copymark.core.secrets.token_hex", lambda count: "fixed-batch")
+    monkeypatch.setattr("faintmark.core.secrets.token_hex", lambda count: "fixed-batch")
     with pytest.raises(FileExistsError):
         app.mark(source, ["Person"], output, preflight=False, create_archive=True)
     assert archive.read_bytes() == b"preserve archive"

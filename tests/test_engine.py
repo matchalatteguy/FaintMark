@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from copymark.engine import TrustMarkEngine
+from faintmark.engine import TrustMarkEngine
 
 
 class Decoder:

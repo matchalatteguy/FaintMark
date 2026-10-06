@@ -14,12 +14,12 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from copymark.core import CopyMark
-from copymark.web import create_app
+from faintmark.core import FaintMark
+from faintmark.web import create_app
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.skipif(os.environ.get("COPYMARK_INTEGRATION") != "1", reason="real models opt-in"),
+    pytest.mark.skipif(os.environ.get("FAINTMARK_INTEGRATION") != "1", reason="real models opt-in"),
 ]
 
 
@@ -44,7 +44,7 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
     original = source.read_bytes()
     home = tmp_path / "home"
     output = tmp_path / "copies"
-    prefix = [sys.executable, "-m", "copymark", "--home", str(home), "--device", "cpu"]
+    prefix = [sys.executable, "-m", "faintmark", "--home", str(home), "--device", "cpu"]
     result = subprocess.run(
         prefix
         + [
@@ -97,11 +97,11 @@ def test_real_cli_saved_exports_and_jpeg(real_image, tmp_path):
 
 
 def test_real_web_saved_files_and_registry_interop(real_image, tmp_path):
-    service = CopyMark(tmp_path / "home", device="cpu")
+    service = FaintMark(tmp_path / "home", device="cpu")
     app = create_app(service=service, home=service.home)
     client = TestClient(app, base_url="http://127.0.0.1")
     client.get("/")
-    headers = {"x-copymark-token": app.state.session_token}
+    headers = {"x-faintmark-token": app.state.session_token}
     response = client.post(
         "/api/mark",
         headers=headers,
@@ -133,7 +133,7 @@ def test_real_web_saved_files_and_registry_interop(real_image, tmp_path):
     assert Path(row["path"]).is_file()
     assert row["original_name"] == "sample.png"
     # A second process/service using the same registry also finds the copy.
-    other = CopyMark(service.home, device="cpu")
+    other = FaintMark(service.home, device="cpu")
     assert other.check(row["path"])["copy_id"] == row["copy_id"]
 
 
@@ -144,7 +144,7 @@ def test_real_mcp_mark_and_check(real_image, tmp_path):
     async def exercise():
         params = StdioServerParameters(
             command=sys.executable,
-            args=["-m", "copymark", "--home", str(tmp_path / "home"), "--device", "cpu", "mcp"],
+            args=["-m", "faintmark", "--home", str(tmp_path / "home"), "--device", "cpu", "mcp"],
         )
         async with stdio_client(params) as (reader, writer):
             async with ClientSession(reader, writer) as session:

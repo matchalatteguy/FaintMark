@@ -3,7 +3,7 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "copymark"
+name = "faintmark"
 version = "0.1.0"
 description = "Local invisible image watermarks with recipient-specific copies, a CLI, and MCP tools."
 readme = "README.md"
@@ -26,11 +26,13 @@ dev = ["pytest>=8,<10", "httpx>=0.27,<1", "ruff>=0.9,<1"]
 research = ["scikit-image>=0.24,<0.27"]
 
 [project.scripts]
-copymark = "copymark.cli:main"
-copymark-mcp = "copymark.mcp_server:main"
+faintmark = "faintmark.cli:main"
+faintmark-mcp = "faintmark.mcp_server:main"
+copymark = "faintmark.cli:main"
+copymark-mcp = "faintmark.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/copymark"]
+packages = ["src/faintmark"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

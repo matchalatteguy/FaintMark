@@ -1,9 +1,8 @@
-"""Small, loopback-only web interface for CopyMark."""
+"""Small, loopback-only web interface for FaintMark."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
 import secrets
 import tempfile
@@ -14,6 +13,8 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+from .paths import resolve_home
 
 _MAX_UPLOAD = 30 * 1024 * 1024
 _MAX_REQUEST_BODY = _MAX_UPLOAD + 500 * 1024
@@ -76,14 +77,7 @@ class RequestBodyLimitMiddleware:
 
 
 def _home_path(home: str | Path | None) -> Path:
-    if home is not None:
-        return Path(home).expanduser().resolve()
-    configured = os.environ.get("COPYMARK_HOME")
-    return (
-        Path(configured).expanduser().resolve()
-        if configured
-        else (Path.home() / ".copymark").resolve()
-    )
+    return resolve_home(home)
 
 
 def _display_filename(filename: str | None) -> str:
@@ -110,13 +104,13 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
         if app.state.service is None:
             with service_lock:
                 if app.state.service is None:
-                    from .core import CopyMark
+                    from .core import FaintMark
 
-                    app.state.service = CopyMark(home=app.state.home, device=device)
+                    app.state.service = FaintMark(home=app.state.home, device=device)
         return app.state.service
 
     def require_session(request: Request, supplied_token: str | None = None) -> None:
-        cookie = request.cookies.get("copymark_session", "")
+        cookie = request.cookies.get("faintmark_session", "")
         token = supplied_token or ""
         expected = app.state.session_token.encode("ascii")
         cookie_matches = secrets.compare_digest(cookie.encode("utf-8"), expected)
@@ -153,10 +147,10 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def index():
         source = _STATIC.read_text(encoding="utf-8")
-        page = source.replace("__COPYMARK_SESSION_TOKEN__", json.dumps(app.state.session_token))
+        page = source.replace("__FAINTMARK_SESSION_TOKEN__", json.dumps(app.state.session_token))
         response = HTMLResponse(page)
         response.set_cookie(
-            "copymark_session",
+            "faintmark_session",
             app.state.session_token,
             httponly=True,
             samesite="strict",
@@ -167,7 +161,7 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
 
     @app.post("/api/mark")
     async def mark(request: Request, image: UploadFile = File(...), recipients: str = Form(...)):
-        require_session(request, request.headers.get("x-copymark-token"))
+        require_session(request, request.headers.get("x-faintmark-token"))
         names = [name.strip() for name in re.split(r"[,\r\n]+", recipients) if name.strip()]
         if not names:
             raise HTTPException(status_code=400, detail="Enter at least one recipient.")
@@ -205,7 +199,7 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
                     "".join(char for char in batch_id if char.isalnum() or char in "-_-")[:40]
                     or "copies"
                 )
-                export_name = f"CopyMark-{safe_batch}.zip"
+                export_name = f"FaintMark-{safe_batch}.zip"
                 app.state.exports[token] = (zip_path, export_name)
                 copies = result.get("copies", [])
                 warnings = list(result.get("warnings", []))
@@ -243,7 +237,7 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
 
     @app.post("/api/check")
     async def check(request: Request, image: UploadFile = File(...)):
-        require_session(request, request.headers.get("x-copymark-token"))
+        require_session(request, request.headers.get("x-faintmark-token"))
         home = app.state.home
         home.mkdir(parents=True, exist_ok=True, mode=0o700)
         temp_root = home / "tmp"
@@ -273,7 +267,7 @@ def create_app(service=None, home=None, device="auto") -> FastAPI:
 
     @app.get("/api/download/{token}")
     async def download(request: Request, token: str):
-        cookie = request.cookies.get("copymark_session", "")
+        cookie = request.cookies.get("faintmark_session", "")
         if not secrets.compare_digest(
             cookie.encode("utf-8"), app.state.session_token.encode("ascii")
         ):

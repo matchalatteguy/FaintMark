@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 
-class FakeCopyMark:
+class FakeFaintMark:
     def __init__(self, home: str | None = None, device: str = "auto") -> None:
         self.home = home
         self.device = device
@@ -61,29 +61,29 @@ class FakeCopyMark:
 
 
 @pytest.fixture
-def cli(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, list[FakeCopyMark]]:
-    from copymark import cli as cli_module
+def cli(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, list[FakeFaintMark]]:
+    from faintmark import cli as cli_module
 
-    instances: list[FakeCopyMark] = []
+    instances: list[FakeFaintMark] = []
 
-    class FakeFactory(FakeCopyMark):
+    class FakeFactory(FakeFaintMark):
         def __init__(self, home: str | None = None, device: str = "auto") -> None:
             super().__init__(home, device)
             instances.append(self)
 
-    core_module = types.ModuleType("copymark.core")
-    core_module.CopyMark = FakeFactory  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "copymark.core", core_module)
+    core_module = types.ModuleType("faintmark.core")
+    core_module.FaintMark = FakeFactory  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "faintmark.core", core_module)
     return cli_module, instances
 
 
 def test_help_does_not_import_copy_engine(monkeypatch: pytest.MonkeyPatch) -> None:
-    from copymark.cli import main
+    from faintmark.cli import main
 
     original_import = builtins.__import__
 
     def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == ".core" or name.endswith("copymark.core"):
+        if name == ".core" or name.endswith("faintmark.core"):
             raise AssertionError("help must not import the engine")
         return original_import(name, *args, **kwargs)
 
@@ -94,7 +94,7 @@ def test_help_does_not_import_copy_engine(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_mark_combines_recipients_and_emits_clean_json(
-    cli: tuple[Any, list[FakeCopyMark]], tmp_path: Path
+    cli: tuple[Any, list[FakeFaintMark]], tmp_path: Path
 ) -> None:
     cli_module, instances = cli
     names_file = tmp_path / "recipients.txt"
@@ -140,10 +140,13 @@ def test_mark_combines_recipients_and_emits_clean_json(
 
 @pytest.mark.parametrize("status,expected", [("matched", 0), ("unknown", 2), ("inconclusive", 2)])
 def test_check_exit_codes(
-    cli: tuple[Any, list[FakeCopyMark]], monkeypatch: pytest.MonkeyPatch, status: str, expected: int
+    cli: tuple[Any, list[FakeFaintMark]],
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+    expected: int,
 ) -> None:
     cli_module, instances = cli
-    instance = FakeCopyMark()
+    instance = FakeFaintMark()
     instance.check = lambda _image: {"status": status}  # type: ignore[method-assign]
     instances.append(instance)
     monkeypatch.setattr(cli_module, "_service", lambda _args: instance)
@@ -158,7 +161,7 @@ def test_check_exit_codes(
 
 
 def test_list_and_backup_are_registry_operations(
-    cli: tuple[Any, list[FakeCopyMark]], tmp_path: Path
+    cli: tuple[Any, list[FakeFaintMark]], tmp_path: Path
 ) -> None:
     cli_module, instances = cli
     stdout = io.StringIO()
@@ -176,9 +179,9 @@ def test_list_and_backup_are_registry_operations(
 
 def test_mcp_tools_have_expected_schemas_and_annotations() -> None:
     pytest.importorskip("mcp.server.fastmcp")
-    from copymark.mcp_server import create_server
+    from faintmark.mcp_server import create_server
 
-    server = create_server(service=FakeCopyMark())
+    server = create_server(service=FakeFaintMark())
     tools = server._tool_manager.list_tools()
     by_name = {tool.name: tool for tool in tools}
 
@@ -214,7 +217,7 @@ def test_mcp_stdio_initializes_lists_and_calls_without_stdout_contamination(tmp_
     child_env["PYTHONPATH"] = os.pathsep.join(filter(None, [source_root, current_pythonpath]))
     server_params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "copymark.mcp_server", "--home", str(tmp_path / "registry")],
+        args=["-m", "faintmark.mcp_server", "--home", str(tmp_path / "registry")],
         env=child_env,
         cwd=str(Path(__file__).resolve().parents[1]),
     )

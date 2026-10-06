@@ -1,9 +1,9 @@
 # Third-party components
 
-CopyMark's code is MIT licensed. Dependencies retain their own licenses.
+FaintMark's code is MIT licensed. Dependencies retain their own licenses.
 
 - [Adobe TrustMark](https://github.com/adobe/trustmark), version 0.9.2: MIT,
-  including its official model files. CopyMark uses Q at strength 1.0 with
+  including its official model files. FaintMark uses Q at strength 1.0 with
   BCH_SUPER (40-bit payload, schema 0). The engine adapter retains the upstream
   inference architecture; it redirects model storage and verifies SHA-256
   digests before safe tensor loading. Attribution is retained in the dependency.

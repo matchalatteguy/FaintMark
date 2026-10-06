@@ -1,4 +1,4 @@
-"""Command-line interface for CopyMark."""
+"""Command-line interface for FaintMark."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from typing import Any, Sequence
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="copymark",
+        prog="faintmark",
         description="Create recipient-specific marked image copies and check them later.",
     )
     parser.add_argument(
-        "--home", help="Registry and model directory (default: $COPYMARK_HOME or ~/.copymark)."
+        "--home", help="Registry and model directory (default: $FAINTMARK_HOME or ~/.faintmark)."
     )
     parser.add_argument(
         "--device", choices=("auto", "cpu", "mps"), default="auto", help="Inference device."
@@ -71,9 +71,9 @@ def _service(args: argparse.Namespace) -> Any:
     # Importing the package facade does not load the image model; the core owns
     # lazy model construction. Keep any incidental import chatter off stdout.
     with redirect_stdout(sys.stderr):
-        from .core import CopyMark
+        from .core import FaintMark
 
-        return CopyMark(home=args.home, device=args.device)
+        return FaintMark(home=args.home, device=args.device)
 
 
 def _recipients(args: argparse.Namespace, parser: argparse.ArgumentParser) -> list[str]:
@@ -132,7 +132,7 @@ def _check_human(result: dict[str, Any]) -> int:
     if status == "unknown":
         print("No registered copy matched this image.")
         return 2
-    print("The result is inconclusive; CopyMark could not determine a match.")
+    print("The result is inconclusive; FaintMark could not determine a match.")
     return 2
 
 
@@ -205,7 +205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SystemExit:
         raise
     except Exception as exc:
-        print(f"copymark: {exc}", file=sys.stderr)
+        print(f"faintmark: {exc}", file=sys.stderr)
         return 1
 
 

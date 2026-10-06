@@ -1,0 +1,10 @@
+{
+  "name": "faintmark",
+  "version": "0.1.0",
+  "description": "Invisible per-recipient image watermarks. Mark one copy per recipient, then identify a leaked copy.",
+  "author": { "name": "matchalatteguy", "url": "https://github.com/matchalatteguy" },
+  "homepage": "https://github.com/matchalatteguy/FaintMark",
+  "repository": "https://github.com/matchalatteguy/FaintMark",
+  "license": "MIT",
+  "keywords": ["watermark", "invisible-watermark", "leak-tracing", "images", "mcp"]
+}

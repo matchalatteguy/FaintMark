@@ -1,0 +1,40 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      FAINTMARK_HOME: ${{ github.workspace }}/.faintmark
+      FAINTMARK_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Check that every version field matches the tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for found in "$(uv version --short)" "$(jq -r .version server.json)" \
+            "$(jq -r '.packages[0].version' server.json)" "$(jq -r .version gemini-extension.json)" \
+            "$(jq -r .version .claude-plugin/plugin.json)"; do
+            [ "$found" = "$tag" ] || { echo "version $found does not match tag $tag"; exit 1; }
+          done
+      - run: uv sync --locked --extra heic
+      - run: uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q
+      - run: uv build
+      - run: uv publish --trusted-publishing always
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Publish to the MCP registry
+        run: |
+          curl --fail -sL -o mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+          echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher.tar.gz" | sha256sum -c
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

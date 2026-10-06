@@ -1,0 +1,13 @@
+{
+  "name": "faintmark",
+  "owner": { "name": "matchalatteguy", "url": "https://github.com/matchalatteguy" },
+  "plugins": [
+    {
+      "name": "faintmark",
+      "source": "./",
+      "description": "Invisible per-recipient image watermarks. Mark one copy per recipient, then identify a leaked copy.",
+      "category": "security",
+      "tags": ["watermark", "images", "mcp"]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "faintmark": { "command": "uvx", "args": ["faintmark", "mcp"] }
+  }
+}

@@ -1,88 +1,114 @@
 # FaintMark
 
-Free, local invisible image watermarks. Create a separate copy for each recipient,
-then identify that copy after it has been shared. CLI and MCP share the same local
-registry.
+Invisible per-recipient image watermarks. Mark one copy per recipient, then
+identify a shared or leaked copy. Designed to survive the recompression and
+resizing chat apps apply. Local and free, no account, no upload. CLI and MCP
+server.
 
-## Start
+```
+$ faintmark mark photo.jpg alice bob
+alice  991e318a21  /Users/me/Pictures/marked/photo-alice-991e318a21.jpg
+bob  746ac9fa88  /Users/me/Pictures/marked/photo-bob-746ac9fa88.jpg
+2 copies in /Users/me/Pictures/marked
 
-Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-Clone and install:
-
-```sh
-git clone https://github.com/matchalatteguy/FaintMark.git
-cd FaintMark
-uv sync --locked
+$ faintmark check ~/Downloads/forwarded.jpg
+matched: alice  991e318a21  photo.jpg  marked 2026-10-06T23:11:54Z
 ```
 
-The models are about 65 MB of ONNX files downloaded from Adobe on first use and
-verified by SHA-256. HEIC input needs the extra: `uv sync --extra heic`.
+Copies are indistinguishable by eye and keep the original's format (HEIC
+becomes JPEG) and roughly its size. In the run above, a 935 KB JPEG gave 873 KB
+copies, and a half-size, quality-60 re-save of one (40 KB) still identified
+alice.
 
-## CLI
-
-```sh
-uv run faintmark mark photo.jpg recipient_1 recipient_2 recipient_3
-uv run faintmark check downloaded.jpg
-uv run faintmark list
-```
-
-Copies go to `marked/` beside the image; `-o DIR` picks another folder and
-`--format png|jpeg|webp` overrides the format. Use `--json` with `mark`, `check`
-or `list` for machine-readable results. Outputs keep the source format (JPEG stays
-JPEG, PNG stays PNG, WebP stays WebP, HEIC becomes JPEG) and any ICC profile; EXIF
-and other metadata are not copied. `check` reports `matched`, `unregistered` (a
-watermark was found but it is not in this registry) or `not_detected`, and exits
-with 0 for a match, 1 for no match and 2 for an error.
+## Install
 
 ```sh
-FAINTMARK_HOME=./my-private-registry uv run faintmark mark photo.jpg recipient_1 -o ./exports
-FAINTMARK_HOME=./my-private-registry uv run faintmark check downloaded.jpg --json
+uvx faintmark mark photo.jpg alice bob   # no install, needs uv
+uv tool install faintmark                # or: pipx install faintmark
 ```
 
-The default registry is `~/.faintmark`; `FAINTMARK_HOME` selects another.
-Every installation has independent records and random copy IDs. Other users can
-decode a copy's ID, but they cannot look up your recipient names without your
-registry. Watermarks are not secret or impossible to remove.
+Python 3.11 or newer on macOS, Linux or Windows; [uv](https://docs.astral.sh/uv/)
+is the easiest way to get it. The first `mark` or `check` downloads Adobe's
+TrustMark Q models (65 MB, SHA-256 verified) into `~/.faintmark`. iPhone HEIC
+input needs `uv tool install 'faintmark[heic]'`. `uv tool uninstall faintmark`
+removes the command and leaves `~/.faintmark` in place.
 
-## MCP
+```
+faintmark mark IMAGE RECIPIENT... [-o DIR] [--format png|jpeg|webp] [--json]
+faintmark check IMAGE [--json]
+faintmark list [-n N] [--json]
+```
 
-FaintMark uses the official MCP SDK over stdio. Add this configuration to your
-MCP client's server settings, replacing the directory with your clone's absolute
-path:
+`--json` prints the same JSON the MCP tools return. `check` exits 0 for a
+match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
+Marking accepts JPEG, PNG, WebP and HEIC up to 25 megapixels, not animated,
+without transparency; `check` reads anything Pillow opens.
+
+## Agents
+
+```sh
+claude mcp add --scope user faintmark -- uvx faintmark mcp
+codex mcp add faintmark -- uvx faintmark mcp
+gemini mcp add -s user faintmark uvx faintmark mcp
+```
+
+Any other client that reads an `mcpServers` config (Claude Desktop, Cursor, Windsurf):
 
 ```json
-{
-  "mcpServers": {
-    "faintmark": {
-      "command": "uv",
-      "args": ["--directory", "/absolute/path/to/faintmark", "run", "faintmark", "mcp"]
-    }
-  }
-}
+{ "mcpServers": { "faintmark": { "command": "uvx", "args": ["faintmark", "mcp"] } } }
 ```
 
-Tools: `mark_image`, `check_image`, `list_copies`.
-`mark_image` takes an image path, a recipient-name list and optional `output_dir`
-and `format`. It returns the output folder and each copy's path and id.
-Supply absolute image/output paths. CLI and MCP share the same registry by
-default. MCP tool calls access local files and do not send images to platforms.
+[Add to Cursor](https://cursor.com/en/install-mcp?name=faintmark&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJmYWludG1hcmsiLCJtY3AiXX0=) ·
+[Add to VS Code](https://vscode.dev/redirect/mcp/install?name=faintmark&config=%7B%22name%22%3A%22faintmark%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22faintmark%22%2C%22mcp%22%5D%7D) ·
+Claude Code plugin: `claude plugin marketplace add matchalatteguy/FaintMark` then `claude plugin install faintmark@faintmark` ·
+Codex plugin: `codex plugin marketplace add matchalatteguy/FaintMark` then `codex plugin add faintmark@faintmark` ·
+Gemini extension: `gemini extensions install https://github.com/matchalatteguy/FaintMark` ·
+Skill for any agent with a shell: `npx skills add matchalatteguy/FaintMark`
 
-## Development
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `mark_image` | `image_path`, `recipients`, optional `output_dir`, `format` | output folder and each copy's `id`, `path`, `warnings` |
+| `check_image` | `image_path` | `status` of `matched` (with `recipient`, `id`, `original`, `marked_at`), `unregistered` (with `id`) or `not_detected` |
+| `list_copies` | optional `limit` | registered copies, newest first |
 
-```sh
-uv sync --locked
-uv run pytest
-uv run ruff check src tests
-```
+Give tools absolute paths. `unregistered` means a watermark was read but its
+id is not in this machine's registry; `not_detected` means no readable mark.
 
-The normal tests use a small injected engine and exercise registry isolation,
-export verification/rollback, input limits, CLI, and real MCP protocol.
-Run the optional real-model tests (they download the models on first use):
+## How it works
 
-```sh
-FAINTMARK_INTEGRATION=1 uv run pytest -m integration
-```
+[TrustMark Q](https://github.com/adobe/trustmark) (Adobe, MIT) embeds a 40-bit
+id as a faint, image-wide pattern (typically 41 to 50 dB PSNR) designed to
+survive JPEG recompression, WebP conversion and moderate resizing. FaintMark
+draws a random id per recipient, writes the copy in the source format (JPEG at
+the source's own quantization tables, PNG, WebP; HEIC becomes JPEG), decodes the
+encoded copy to prove the id is there, and records id, recipient and file in a
+local SQLite registry. A preflight re-encodes each copy at JPEG quality 70, at
+full size and resized to 1280 px (half size when the image is smaller), and warns
+when the id does not survive; send those copies as a file rather than a photo.
 
-No recipient databases, original images, exports or model files belong in commits.
+ICC profiles are kept so Display P3 photos stay the same colour. EXIF and other
+metadata are not copied. Recovery depends on what is done to the copy; the
+preflight warning is the per-copy evidence.
 
-MIT licensed.
+## Limits
+
+- `matched` means the copy that was issued to that recipient. It does not prove
+  who shared it; copies can be forwarded.
+- `matched` is a registry lookup, not a signature. The mark is not secret:
+  anyone with TrustMark can read an id, and anyone who knows one can embed it in
+  another image. Only your registry maps ids to names.
+- Someone who knows the mark is there can degrade it, and two recipients
+  comparing their copies can locate it.
+- Images wider or taller than 2:1 carry the mark only in their centre square.
+  Heavy downscaling (thumbnails, screenshots of previews) or cropping can
+  destroy it.
+
+## Registry
+
+`~/.faintmark/registry.sqlite3` maps ids to recipient names. Keep it private
+and back it up; without it a copy is `unregistered`. `FAINTMARK_HOME` selects
+another location.
+
+MIT licensed. TrustMark and its models are Adobe's, also MIT.
+
+<!-- mcp-name: io.github.matchalatteguy/faintmark -->

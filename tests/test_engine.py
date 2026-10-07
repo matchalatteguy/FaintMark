@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from faintmark.engine import Engine
+from faintmark.engine import Engine, ensure_models
 
 pytestmark = [
     pytest.mark.integration,
@@ -71,6 +71,7 @@ def test_unmarked_image_is_not_detected(engine):
 def test_cli_marks_and_traces_jpeg_copies(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
+    ensure_models(MODELS)
     try:
         (home / "models").symlink_to(MODELS, target_is_directory=True)
     except OSError:

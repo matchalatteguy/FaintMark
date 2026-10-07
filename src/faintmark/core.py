@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
-from typing_extensions import TypedDict  # pydantic rejects typing.TypedDict before Python 3.12
+from typing_extensions import Required, TypedDict  # pydantic needs these before Python 3.12
 
 from .engine import Engine
 
@@ -56,7 +56,7 @@ class MarkResult(TypedDict):
 
 
 class CheckResult(TypedDict, total=False):
-    status: Literal["matched", "unregistered", "not_detected"]
+    status: Required[Literal["matched", "unregistered", "not_detected"]]
     id: str
     recipient: str
     original: str
@@ -138,12 +138,12 @@ def _unused_id(db, taken):
 
 
 def _verified(engine, marked, value, target, attempts, name):
-    """Saved bytes and their decoded image for the first attempt whose copy still decodes."""
-    for params in attempts:
+    """Saved bytes, their decoded image and the attempt index of the first copy that decodes."""
+    for attempt, params in enumerate(attempts):
         data = _save(marked, target, params)
         saved = _decoded(data)
         if engine.decode(saved) == value:
-            return data, saved
+            return data, saved, attempt
     raise RuntimeError(
         f"{name}: watermark could not be verified in the saved copy; try --format png"
     )
@@ -195,8 +195,8 @@ class FaintMark:
         names = [name.strip() for name in recipients]
         if not 1 <= len(names) <= MAX_RECIPIENTS:
             raise ValueError(f"give 1 to {MAX_RECIPIENTS} recipients")
-        if not all(1 <= len(name) <= MAX_NAME for name in names):
-            raise ValueError(f"recipient names must be 1 to {MAX_NAME} characters")
+        if not all(1 <= len(name) <= MAX_NAME and name.isprintable() for name in names):
+            raise ValueError(f"recipient names must be 1 to {MAX_NAME} printable characters")
         source = Path(image).expanduser()
         cover, fmt, jpeg, icc = _read(source)
         target = format or DEFAULT_TARGET[fmt]
@@ -215,14 +215,18 @@ class FaintMark:
                     value = _unused_id(db, {c["id"] for c in copies})
                     copy_id = f"{value:010x}"
                     marked = self.engine.encode(cover.copy(), value)
-                    data, saved = _verified(
+                    data, saved, attempt = _verified(
                         self.engine, marked, value, target, attempts, source.name
                     )
-                    path = out / f"{stem}-{_safe(recipient)}-{copy_id}{EXTENSIONS[target]}"
+                    path = out / f"{stem}-{copy_id}{EXTENSIONS[target]}"
                     with open(path, "xb") as file:
                         created.append(path)
                         file.write(data)
                     warnings = _preflight(self.engine, saved, value)
+                    if attempt:
+                        warnings.append(
+                            "saved at JPEG quality 95; the source settings lost the mark"
+                        )
                     copies.append(
                         dict(id=copy_id, recipient=recipient, path=str(path), warnings=warnings)
                     )
@@ -266,7 +270,7 @@ class FaintMark:
             rows = db.execute(
                 "SELECT id, recipient, original, path, marked_at, warnings FROM copies "
                 "ORDER BY rowid DESC LIMIT ?",
-                (limit,),
+                (max(limit, 0),),
             ).fetchall()
         return {
             "copies": [

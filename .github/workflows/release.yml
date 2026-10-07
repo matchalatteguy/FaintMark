@@ -26,6 +26,7 @@ jobs:
       - run: uv sync --locked --extra heic
       - run: uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q
       - run: uv build
+      - run: uvx --from "$(ls dist/*.whl)" faintmark --version
       - run: uv publish --trusted-publishing always
       - run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
         env:

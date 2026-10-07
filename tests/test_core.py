@@ -32,7 +32,7 @@ def test_output_keeps_the_source_format(app, make_image, icc, name, save, fmt, s
     copy = result["copies"][0]
     path = Path(copy["path"])
     assert re.fullmatch(r"[0-9a-f]{10}", copy["id"])
-    assert path.name == f"photo-alice-{copy['id']}{suffix}"
+    assert path.name == f"photo-{copy['id']}{suffix}"
     with Image.open(path) as saved:
         assert saved.format == {".jpg": "JPEG", ".png": "PNG", ".webp": "WEBP"}[suffix]
         assert saved.info["icc_profile"] == icc
@@ -55,7 +55,7 @@ def test_heic_becomes_jpeg(app, make_image):
     pytest.importorskip("pillow_heif")
     copy = app.mark(make_image("photo.heic", quality=80), ["alice"])["copies"][0]
     path = Path(copy["path"])
-    assert (path.parent.name, path.name) == ("marked", f"photo-alice-{copy['id']}.jpg")
+    assert (path.parent.name, path.name) == ("marked", f"photo-{copy['id']}.jpg")
     with Image.open(path) as saved:
         assert saved.format == "JPEG"
     assert app.check(path)["recipient"] == "alice"
@@ -95,7 +95,7 @@ def test_check_reports_each_status(app, make_image, tmp_path, monkeypatch):
 def test_existing_files_are_never_overwritten(app, make_image, monkeypatch):
     source = make_image("photo.png")
     monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: 0x0123456789)
-    taken = source.parent / "marked" / "photo-alice-0123456789.png"
+    taken = source.parent / "marked" / "photo-0123456789.png"
     taken.parent.mkdir()
     taken.write_bytes(b"keep")
 
@@ -144,6 +144,7 @@ def test_jpeg_is_resaved_at_quality_95_when_verification_fails(app, make_image, 
     monkeypatch.setattr(app.engine, "decode", fail_first)
     copy = app.mark(source, ["alice"])["copies"][0]
 
+    assert copy["warnings"][-1].startswith("saved at JPEG quality 95")
     reference = BytesIO()
     Image.new("RGB", (8, 8)).save(reference, format="JPEG", quality=95)
     with Image.open(copy["path"]) as saved, Image.open(reference) as q95:
@@ -157,8 +158,8 @@ def test_input_limits(app, make_image, tmp_path, monkeypatch):
     for recipients in ([], ["x"] * 101):
         with pytest.raises(ValueError, match="^give 1 to 100 recipients$"):
             app.mark(source, recipients)
-    for recipients in (["x" * 201], ["  "]):
-        with pytest.raises(ValueError, match="^recipient names must be 1 to 200 characters$"):
+    for recipients in (["x" * 201], ["  "], ["a\nb"]):
+        with pytest.raises(ValueError, match="^recipient names must be 1 to 200 printable char"):
             app.mark(source, recipients)
     Image.new("P", (8, 8)).save(tmp_path / "icon.gif")
     with pytest.raises(ValueError, match=r"^icon.gif: unsupported format GIF; use JPEG, PNG"):

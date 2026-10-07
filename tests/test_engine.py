@@ -154,8 +154,9 @@ KNOWN_MISSES = {("fixture-320x240", "webp75")}  # not recovered in our runs; doc
 @pytest.mark.parametrize(
     "cover", ["fixture-320x240", "synthetic-1600x1200", "smooth-portrait-900x1200"]
 )
-def test_survives_a_chat_app_ladder(request, engine, cover, step):
+@pytest.mark.parametrize("copy_id", IDS)
+def test_survives_a_chat_app_ladder(request, engine, cover, step, copy_id):
     if (cover, step) in KNOWN_MISSES:
         request.applymarker(pytest.mark.xfail(strict=True, reason="not recovered after WebP q75"))
-    marked = engine.encode(synthetic_covers()[cover], IDS[0])
-    assert engine.decode(CHAT_APP_STEPS[step](marked)) == IDS[0]
+    delivered = reencode(engine.encode(synthetic_covers()[cover], copy_id), "JPEG", 90)
+    assert engine.decode(CHAT_APP_STEPS[step](delivered)) == copy_id

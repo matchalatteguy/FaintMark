@@ -20,7 +20,8 @@ faintmark list --json
 - `check` exits 0 for `matched` (returns `recipient`, `id`, `original`, `marked_at`), 1 otherwise, 2 on error.
 - `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`);
   `not_detected` means no readable mark, for example after heavy downscaling or cropping.
-- A copy with `warnings` is fragile; suggest sending it as a file rather than a photo.
+- A warning starting with "may not survive" means the copy is fragile; suggest sending it as a file
+  rather than a photo. Other warnings are informational (for example a JPEG saved at quality 95).
 - Say "the id in this image is registered to X", never "X leaked it": copies can be forwarded and
   ids can be copied into other images. The mark can be removed by someone who knows it is there,
   so `not_detected` says nothing about where an image came from.

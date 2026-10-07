@@ -163,6 +163,9 @@ def test_input_limits(app, make_image, tmp_path, monkeypatch):
     for recipients in (["x" * 201], ["  "], ["a\nb"]):
         with pytest.raises(ValueError, match="^recipient names must be 1 to 200 printable char"):
             app.mark(source, recipients)
+    Image.new("I;16", (128, 96), 40000).save(tmp_path / "scan.png")
+    with pytest.raises(ValueError, match="^scan.png: 16-bit images are not supported"):
+        app.mark(tmp_path / "scan.png", ["alice"])
     Image.new("P", (8, 8)).save(tmp_path / "icon.gif")
     with pytest.raises(ValueError, match=r"^icon.gif: unsupported format GIF; use JPEG, PNG"):
         app.mark(tmp_path / "icon.gif", ["alice"])

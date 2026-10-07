@@ -29,8 +29,8 @@ uvx faintmark mark photo.jpg alice bob   # no install, needs uv
 uv tool install faintmark                # or: pipx install faintmark
 ```
 
-Python 3.11 or newer on macOS, Linux or Windows; [uv](https://docs.astral.sh/uv/)
-is the easiest way to get it. The first `mark` or `check` downloads Adobe's
+Python 3.11 or newer on macOS, Linux or Windows (Intel Macs: 3.11 to 3.13);
+[uv](https://docs.astral.sh/uv/) is the easiest way to get it. The first `mark` or `check` downloads Adobe's
 TrustMark Q models (65 MB, SHA-256 verified) into `~/.faintmark`. iPhone HEIC
 input needs the `heic` extra: `uv tool install 'faintmark[heic]'`, or
 `uvx --from 'faintmark[heic]' faintmark mcp` for the server.
@@ -45,8 +45,9 @@ faintmark list [-n N] [--json]
 
 `--json` prints the same JSON the MCP tools return. `check` exits 0 for a
 match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
-Marking accepts JPEG, PNG, WebP and HEIC up to 25 megapixels, not animated,
-without transparency; `check` reads anything Pillow opens.
+Marking accepts 8-bit JPEG, PNG, WebP and HEIC up to 25 megapixels, not
+animated, without transparency, and needs about 1.5 GB of memory at that size;
+`check` reads anything Pillow opens up to 100 megapixels.
 
 ## Agents
 

@@ -99,6 +99,8 @@ def _read(path):
             raise ValueError(f"{path.name}: animated images are not supported")
         if image.width * image.height > MAX_PIXELS:
             raise ValueError(f"{path.name}: larger than 25 megapixels")
+        if image.mode in ("I", "F") or image.mode.startswith("I;16"):
+            raise ValueError(f"{path.name}: 16-bit images are not supported; convert to 8-bit")
         if (
             image.has_transparency_data
             and image.convert("RGBA").getchannel("A").getextrema()[0] < 255

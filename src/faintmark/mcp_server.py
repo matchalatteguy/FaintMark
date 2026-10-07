@@ -32,8 +32,8 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "them locally. Use before sharing a picture with several people so a copy that turns "
             "up later can be traced to the label it was issued under. Writes files only and sends "
             "nothing; keeps the source format (JPEG stays JPEG). Returns the output folder and "
-            "each copy's path, id and warnings; a copy with warnings is fragile, so suggest "
-            "sending it as a file rather than a photo."
+            "each copy's path, id and warnings. A warning starting with 'may not survive' means "
+            "the copy is fragile, so suggest sending it as a file rather than a photo."
         ),
         annotations=ToolAnnotations(
             readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False

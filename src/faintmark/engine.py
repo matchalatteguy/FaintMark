@@ -21,6 +21,7 @@ from .bch import decode as bch_decode
 from .bch import encode as bch_encode
 
 MODEL_URL = "https://cai-watermark.adobe.net/watermarking/trustmark-models/"
+# Published by Adobe on 2026-09-28; fetched and hashed on 2026-10-06.
 MODEL_HASHES = {
     "encoder_Q.onnx": "19b3d1b25836130ffd78775a8f61539f993375d1823ef0e59ba5b8dffb4f892d",
     "decoder_Q.onnx": "ee3268f057c9dabef680e169302f5973d0589feea86189ed229a896cc3aa88df",
@@ -100,7 +101,7 @@ def _paste(out, cover, wm, top, bottom, left, right):
             out[top:bottom, col] = a * wm[:, k] + (1 - a) * cover[top:bottom, col]
 
 
-def _session(path):
+def _load(path):
     os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # official builds phone home by default
     import onnxruntime as ort
 
@@ -113,23 +114,19 @@ def _session(path):
 class Engine:
     def __init__(self, models_dir: Path):
         self.models_dir = models_dir
-        self._sessions_cache = None
+        self._sessions = {}
         self._load_lock = threading.Lock()
 
-    def _sessions(self):
+    def _session(self, name):
         with self._load_lock:
-            if self._sessions_cache is None:
-                directory = ensure_models(self.models_dir)
-                self._sessions_cache = (
-                    _session(directory / "encoder_Q.onnx"),
-                    _session(directory / "decoder_Q.onnx"),
-                )
-        return self._sessions_cache
+            if name not in self._sessions:
+                self._sessions[name] = _load(ensure_models(self.models_dir) / name)
+        return self._sessions[name]
 
     def encode(self, image: Image.Image, copy_id: int) -> Image.Image:
         if not isinstance(copy_id, int) or not 0 <= copy_id < 2**40:
             raise ValueError("copy_id must be an int in [0, 2**40)")
-        encoder, _ = self._sessions()
+        encoder = self._session("encoder_Q.onnx")
         # 96 codeword bits + 4 schema bits (BCH_SUPER = 0)
         bits = [int(c) for c in format(bch_encode(copy_id), f"0{N}b")] + [0, 0, 0, 0]
         secret = np.array([bits], dtype=np.float32)
@@ -151,7 +148,7 @@ class Engine:
         return Image.fromarray(out)
 
     def decode(self, image: Image.Image) -> int | None:
-        _, decoder = self._sessions()
+        decoder = self._session("decoder_Q.onnx")
         crop = image.crop(_region(*image.size)).resize((DEC_RES, DEC_RES), Image.BILINEAR)
         bits = decoder.run(None, {decoder.get_inputs()[0].name: _tensor(crop)})[0][0] > 0
         if bits[98] or bits[99]:  # schema bits must be 00

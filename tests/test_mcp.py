@@ -27,7 +27,7 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
     assert tools["list_copies"].annotations.readOnlyHint is True
     assert tools["mark_image"].inputSchema["required"] == ["image_path", "recipients"]
     assert "copies" in tools["mark_image"].outputSchema["properties"]
-    assert "status" in tools["check_image"].outputSchema["properties"]
+    assert tools["check_image"].outputSchema["required"] == ["status"]
     assert "copies" in tools["list_copies"].outputSchema["properties"]
 
 

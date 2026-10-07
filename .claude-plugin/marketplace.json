@@ -1,6 +1,7 @@
 {
   "name": "faintmark",
   "owner": { "name": "matchalatteguy", "url": "https://github.com/matchalatteguy" },
+  "metadata": { "description": "Invisible per-recipient image watermarks (CLI and MCP server)." },
   "plugins": [
     {
       "name": "faintmark",

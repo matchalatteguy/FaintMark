@@ -96,8 +96,16 @@ smaller), and warns when the id does not survive; send those copies as a file
 rather than a photo.
 
 ICC profiles are kept so Display P3 photos stay the same colour. EXIF and other
-metadata are not copied. Recovery depends on what is done to the copy; the
-preflight warning is the per-copy evidence.
+metadata are not copied.
+
+Compatibility with Adobe's own implementation is checked in: `tests/fixtures`
+holds BCH vectors and images marked by the upstream PyTorch package; our
+decoder reads them and our encoder reproduces them within one grey level. A
+chat-app style ladder in the real-model tests (resize to 1600, 1280 and 1024 px
+with JPEG 70 to 80, WebP 75, and a chained resize-plus-JPEG pass) recovers the
+id on all three test covers except WebP 75 on a 320 px cover. That is
+reproducible local evidence, not a messaging-app round trip; the preflight
+warning is the per-copy evidence.
 
 ## Limits
 

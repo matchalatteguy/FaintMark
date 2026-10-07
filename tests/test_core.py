@@ -86,7 +86,6 @@ def test_check_reports_each_status(app, make_image, tmp_path, monkeypatch):
         "id": copy["id"],
         "recipient": "alice",
         "original": "photo.png",
-        "path": copy["path"],
     }
     other = FaintMark(tmp_path / "other")
     assert other.check(copy["path"]) == {"status": "unregistered", "id": copy["id"]}

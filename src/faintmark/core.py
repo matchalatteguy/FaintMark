@@ -45,9 +45,12 @@ class Copy(TypedDict):
     warnings: list[str]
 
 
-class ListedCopy(Copy):
+class ListedCopy(TypedDict):
+    id: str
+    recipient: str
     original: str
     marked_at: str
+    warnings: list[str]
 
 
 class MarkResult(TypedDict):
@@ -61,7 +64,6 @@ class CheckResult(TypedDict, total=False):
     id: str
     recipient: str
     original: str
-    path: str
     marked_at: str
 
 
@@ -256,24 +258,23 @@ class FaintMark:
         copy_id = f"{value:010x}"
         with self._connect() as db:
             row = db.execute(
-                "SELECT recipient, original, path, marked_at FROM copies WHERE id = ?", (copy_id,)
+                "SELECT recipient, original, marked_at FROM copies WHERE id = ?", (copy_id,)
             ).fetchone()
         if row is None:
             return {"status": "unregistered", "id": copy_id}
-        recipient, original, path, marked_at = row
+        recipient, original, marked_at = row
         return {
             "status": "matched",
             "id": copy_id,
             "recipient": recipient,
             "original": original,
-            "path": path,
             "marked_at": marked_at,
         }
 
     def list_copies(self, limit: int = 100) -> ListResult:
         with self._connect() as db:
             rows = db.execute(
-                "SELECT id, recipient, original, path, marked_at, warnings FROM copies "
+                "SELECT id, recipient, original, marked_at, warnings FROM copies "
                 "ORDER BY rowid DESC LIMIT ?",
                 (max(limit, 0),),
             ).fetchall()
@@ -283,10 +284,9 @@ class FaintMark:
                     "id": copy_id,
                     "recipient": recipient,
                     "original": original,
-                    "path": path,
                     "marked_at": marked_at,
                     "warnings": json.loads(warnings),
                 }
-                for copy_id, recipient, original, path, marked_at, warnings in rows
+                for copy_id, recipient, original, marked_at, warnings in rows
             ]
         }

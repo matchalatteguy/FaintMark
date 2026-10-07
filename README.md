@@ -45,8 +45,9 @@ faintmark list [-n N] [--json]
 
 `--json` prints the same JSON the MCP tools return. `check` exits 0 for a
 match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
-Marking accepts 8-bit JPEG, PNG, WebP and HEIC up to 25 megapixels, not
-animated, without transparency, and needs about 1.5 GB of memory at that size;
+Marking accepts JPEG, PNG, WebP and HEIC up to 25 megapixels, not animated,
+without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
+rejected), and needs about 1.5 GB of memory at that size;
 `check` reads anything Pillow opens up to 100 megapixels.
 
 ## Agents

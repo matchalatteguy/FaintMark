@@ -107,9 +107,9 @@ preflight warning is the per-copy evidence.
   embed it in another image, and TrustMark publishes a watermark remover; an
   informed recipient can strip the mark.
 - Two recipients comparing their copies can locate the mark.
-- Images wider or taller than 2:1 carry the mark only in their centre square.
-  Heavy downscaling (thumbnails, screenshots of previews) or cropping can
-  destroy it.
+- Images wider or taller than 2:1 carry the mark only in their centre square,
+  so a resize that crosses 2:1 can lose it. Heavy downscaling (thumbnails,
+  screenshots of previews) or cropping can destroy it.
 
 ## Registry
 

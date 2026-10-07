@@ -1,10 +1,12 @@
 import re
+import sqlite3
 from io import BytesIO
 from pathlib import Path
 
 import pytest
 from PIL import Image, JpegImagePlugin
 
+from faintmark import engine
 from faintmark.core import FaintMark
 
 
@@ -169,3 +171,33 @@ def test_input_limits(app, make_image, tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="^photo.png: larger than 25 megapixels$"):
         app.mark(source, ["alice"])
     assert app.check(copy["path"])["status"] == "matched"
+
+
+def test_exif_orientation_is_applied_and_not_copied(app, make_image):
+    exif = Image.Exif()
+    exif[274] = 6  # rotate 90 degrees clockwise on display
+    source = make_image("photo.jpg", size=(192, 128), quality=90, exif=exif.tobytes())
+    copy = app.mark(source, ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as saved:
+        assert saved.size == (128, 192)
+        assert not saved.getexif()
+    assert app.check(copy["path"])["recipient"] == "alice"
+
+
+def test_registry_failure_removes_the_written_files(app, make_image, monkeypatch):
+    source = make_image("photo.png")
+    monkeypatch.setattr("faintmark.core.INSERT", "INSERT INTO nowhere VALUES (:id)")
+    with pytest.raises(sqlite3.OperationalError):
+        app.mark(source, ["alice", "bob"])
+    assert list((source.parent / "marked").iterdir()) == []
+
+
+def test_tampered_model_download_is_rejected(tmp_path, monkeypatch):
+    source = tmp_path / "cdn"
+    source.mkdir()
+    for name in engine.MODEL_HASHES:
+        (source / name).write_bytes(b"not the model")
+    monkeypatch.setattr(engine, "MODEL_URL", source.as_uri() + "/")
+    with pytest.raises(RuntimeError, match="^model checksum mismatch: encoder_Q.onnx$"):
+        engine.ensure_models(tmp_path / "models")
+    assert list((tmp_path / "models").iterdir()) == []

@@ -1,3 +1,5 @@
+import functools
+import importlib.util
 import json
 import os
 import shutil
@@ -20,6 +22,7 @@ pytestmark = [
 ]
 IDS = [0x0123456789, 0xFEDCBA9876]
 MODELS = Path(os.environ.get("FAINTMARK_HOME", Path.home() / ".faintmark")) / "models"
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(scope="module")
@@ -104,3 +107,55 @@ def test_cli_marks_and_traces_jpeg_copies(tmp_path):
     assert (code, found["status"], found["recipient"]) == (0, "matched", "bob")
     code, found = faintmark("check", source)
     assert (code, found["status"]) == (1, "not_detected")
+
+
+def shrink(image, edge, resample):
+    scale = edge / max(image.size)
+    if scale >= 1:
+        return image
+    return image.resize((round(image.width * scale), round(image.height * scale)), resample)
+
+
+def reencode(image, fmt, quality, edge=None, resample=Image.LANCZOS):
+    if edge:
+        image = shrink(image, edge, resample)
+    buffer = BytesIO()
+    image.save(buffer, format=fmt, quality=quality)
+    return Image.open(buffer).convert("RGB")
+
+
+CHAT_APP_STEPS = {
+    "1600+jpeg80": lambda im: reencode(im, "JPEG", 80, 1600),
+    "1280+jpeg70": lambda im: reencode(im, "JPEG", 70, 1280, Image.BILINEAR),
+    "1024+jpeg70": lambda im: reencode(im, "JPEG", 70, 1024, Image.LANCZOS),
+    "webp75": lambda im: reencode(im, "WEBP", 75),
+    "chained": lambda im: reencode(
+        reencode(im, "JPEG", 80, 1600), "JPEG", 70, 1280, Image.BILINEAR
+    ),
+}
+
+
+@functools.cache
+def synthetic_covers():
+    spec = importlib.util.spec_from_file_location("make_fixtures", FIXTURES / "make_fixtures.py")
+    recipe = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(recipe)
+    return {
+        "fixture-320x240": Image.open(FIXTURES / "cover.png").convert("RGB"),
+        "synthetic-1600x1200": recipe.synthetic_cover(1600, 1200),
+        "smooth-portrait-900x1200": recipe.synthetic_cover(900, 1200, seed=5, smooth=True),
+    }
+
+
+KNOWN_MISSES = {("fixture-320x240", "webp75")}  # not recovered in our runs; documented, not hidden
+
+
+@pytest.mark.parametrize("step", CHAT_APP_STEPS)
+@pytest.mark.parametrize(
+    "cover", ["fixture-320x240", "synthetic-1600x1200", "smooth-portrait-900x1200"]
+)
+def test_survives_a_chat_app_ladder(request, engine, cover, step):
+    if (cover, step) in KNOWN_MISSES:
+        request.applymarker(pytest.mark.xfail(strict=True, reason="not recovered after WebP q75"))
+    marked = engine.encode(synthetic_covers()[cover], IDS[0])
+    assert engine.decode(CHAT_APP_STEPS[step](marked)) == IDS[0]

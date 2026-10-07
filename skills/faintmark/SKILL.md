@@ -17,7 +17,9 @@ faintmark list --json
 
 - Writes files only, sends nothing. Send each person only their own file (`copies[].path`); file
   names carry the id, not the recipient. The source format is kept: JPEG stays JPEG.
-- `check` exits 0 for `matched` (returns `recipient`, `id`, `original`, `marked_at`), 1 otherwise, 2 on error.
+- `check` exits 0 for `matched` (returns `recipient`, `id`, `marked_at`, `same_image`), 1 otherwise, 2 on
+  error. `same_image: false` means the id is registered but this is not the picture issued (a heavy
+  crop, or an id copied into another image). `--files` adds file names and paths; omit it unless needed.
 - `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`);
   `not_detected` means no readable mark, for example after heavy downscaling or cropping.
 - A warning starting with "may not survive" means the copy is fragile; suggest sending it as a file

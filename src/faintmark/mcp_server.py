@@ -55,25 +55,27 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
         description=(
             "Decode the id in an image (any format Pillow opens, up to 100 megapixels) and look it "
             "up in the local registry; designed to work after chat-app recompression or resizing. "
-            "status is matched (the id is registered to "
-            "the returned recipient), unregistered (an id was read but it is not in this "
-            "registry) or not_detected (no readable mark, which says nothing about where the "
-            "image came from)."
+            "status is matched (the id is registered to the returned recipient), unregistered (an "
+            "id was read but it is not in this registry) or not_detected (no readable mark, which "
+            "says nothing about where the image came from). A match also reports same_image: "
+            "false means the picture is not the one issued, so the id was copied into another "
+            "image or the copy was heavily cropped. files=true adds the original file name and "
+            "the issued copy's path."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )
-    async def check_image(image_path: str) -> CheckResult:
-        result = await to_thread.run_sync(get_service().check, image_path, limiter=_HEAVY)
+    async def check_image(image_path: str, files: bool = False) -> CheckResult:
+        result = await to_thread.run_sync(get_service().check, image_path, files, limiter=_HEAVY)
         # FastMCP would fill the absent optional keys with nulls that its own outputSchema rejects
         text = TextContent(type="text", text=json.dumps(result, indent=2))
         return CallToolResult(content=[text], structuredContent=result)
 
     @server.tool(
-        description="List registered copies, newest first.",
+        description=("List registered copies, newest first. files=true adds file names and paths."),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )
-    async def list_copies(limit: int = 100) -> ListResult:
-        return await to_thread.run_sync(get_service().list_copies, limit)
+    async def list_copies(limit: int = 100, files: bool = False) -> ListResult:
+        return await to_thread.run_sync(get_service().list_copies, limit, files)
 
     return server
 

@@ -25,10 +25,15 @@ def _parser():
     mark.add_argument("-o", "--output", metavar="DIR", help="default: marked/ beside the image")
     mark.add_argument("--format", choices=["png", "jpeg", "webp"], help="default: the image's own")
 
-    check = commands.add_parser("check", parents=[output], help="Identify which copy an image is.")
+    files = argparse.ArgumentParser(add_help=False)
+    files.add_argument("--files", action="store_true", help="include file names and paths")
+
+    check = commands.add_parser(
+        "check", parents=[output, files], help="Identify which copy an image is."
+    )
     check.add_argument("image", help="any image Pillow can open")
 
-    listing = commands.add_parser("list", parents=[output], help="List registered copies.")
+    listing = commands.add_parser("list", parents=[output, files], help="List registered copies.")
     listing.add_argument(
         "-n", "--limit", type=int, default=100, metavar="N", help="newest N copies (default 100)"
     )
@@ -49,10 +54,17 @@ def _print_mark(result):
 def _print_check(result):
     match result["status"]:
         case "matched":
+            original = f"  {result['original']}" if "original" in result else ""
             print(
-                f"matched: {result['recipient']}  {result['id']}  {result['original']}  "
+                f"matched: {result['recipient']}  {result['id']}{original}  "
                 f"marked {result['marked_at']}"
             )
+            if result.get("same_image") is False:
+                print(
+                    f"  warning: not the picture issued to {result['recipient']}; "
+                    "the id may have been copied",
+                    file=sys.stderr,
+                )
         case "unregistered":
             print(f"unregistered: {result['id']} is not in this registry")
         case "not_detected":
@@ -61,7 +73,8 @@ def _print_check(result):
 
 def _print_list(result):
     for copy in result["copies"]:
-        print(f"{copy['id']}  {copy['recipient']}  {copy['original']}  {copy['marked_at']}")
+        original = f"  {copy['original']}" if "original" in copy else ""
+        print(f"{copy['id']}  {copy['recipient']}{original}  {copy['marked_at']}")
     if not result["copies"]:
         print("no copies")
 
@@ -81,10 +94,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "mark":
             result = service.mark(args.image, args.recipients, args.output, args.format)
         elif args.command == "check":
-            result = service.check(args.image)
+            result = service.check(args.image, args.files)
             code = 0 if result["status"] == "matched" else 1
         else:
-            result = service.list_copies(args.limit)
+            result = service.list_copies(args.limit, args.files)
         if args.json:
             print(json.dumps(result, indent=2))
         else:

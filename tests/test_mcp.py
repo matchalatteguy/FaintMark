@@ -26,6 +26,7 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
     assert tools["check_image"].annotations.readOnlyHint is True
     assert tools["list_copies"].annotations.readOnlyHint is True
     assert tools["mark_image"].inputSchema["required"] == ["image_path", "recipients"]
+    assert tools["check_image"].inputSchema["properties"]["files"]["default"] is False
     assert "copies" in tools["mark_image"].outputSchema["properties"]
     assert tools["check_image"].outputSchema["required"] == ["status"]
     assert _HEAVY.total_tokens == 1  # one inference job at a time
@@ -53,6 +54,8 @@ def test_mark_then_check_roundtrip(home, make_image):
     assert [copy["path"].endswith(".jpg") for copy in copies] == [True, True]
     assert checked.structuredContent["status"] == "matched"
     assert checked.structuredContent["recipient"] == "bob"
+    assert checked.structuredContent["same_image"] is True
+    assert "path" not in checked.structuredContent
     assert [copy["id"] for copy in listed.structuredContent["copies"]] == [copies[1]["id"]]
     assert missing.isError
 

@@ -1,21 +1,17 @@
 # Contributing
 
-FaintMark is a local, free tool. Keep the CLI and MCP tools on the same
-core operations. Keep originals unchanged and recipient data out of Git.
-
 ```sh
 uv sync
-uv run pytest
 uv run ruff check src tests
+uv run pytest
+FAINTMARK_INTEGRATION=1 uv run pytest   # also runs the real-model tests (downloads 65 MB once)
 ```
 
-For an engine change, add a small, reproducible comparison of complete ID
-recovery, false matches and visual quality. Do not accept a nearest ID when
-decoding fails. A copied identifier must never be described as proof that a
-person leaked an image. Tests should exercise saved output files and include
-unmarked images.
+Keep it small. FaintMark does one thing: one invisibly marked copy per recipient, and a check
+that identifies a copy. New dependencies, flags or disclaimers need a strong reason.
 
-Use the engine interface in `src/faintmark/engine.py` for future algorithms.
-Introduce new variants/schemas explicitly, retain old decoding compatibility,
-and preserve the registry's migration path. Keep model provenance and hashes
-reviewable; do not commit model files or add paid services to the default path.
+Engine changes must keep `check` working on copies made by earlier versions: keep the old
+decoding path next to the new one. Show recovery rates before and after on the same transforms
+(JPEG quality 70, resizing to 1280 px). Never return a nearest-match guess.
+
+Keep recipient registries, original photos and marked copies out of commits.

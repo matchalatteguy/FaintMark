@@ -1,5 +1,3 @@
-"""MCP server over stdio."""
-
 import json
 from typing import Literal
 
@@ -48,9 +46,9 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
 
     @server.tool(
         description=(
-            "Identify which registered copy an image is, even after chat-app recompression or "
-            "resizing. status is matched (returns recipient and id), unregistered (a watermark "
-            "was found but it is not in this registry) or not_detected."
+            "Identify which registered copy an image is; designed to work after chat-app "
+            "recompression or resizing. status is matched (returns recipient and id), "
+            "unregistered (a watermark was found but it is not in this registry) or not_detected."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )

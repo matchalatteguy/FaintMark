@@ -51,6 +51,16 @@ def test_output_keeps_the_source_format(app, make_image, icc, name, save, fmt, s
     )
 
 
+def test_heic_becomes_jpeg(app, make_image):
+    pytest.importorskip("pillow_heif")
+    copy = app.mark(make_image("photo.heic", quality=80), ["alice"])["copies"][0]
+    path = Path(copy["path"])
+    assert (path.parent.name, path.name) == ("marked", f"photo-alice-{copy['id']}.jpg")
+    with Image.open(path) as saved:
+        assert saved.format == "JPEG"
+    assert app.check(path)["recipient"] == "alice"
+
+
 def test_transparency_is_rejected_and_opaque_alpha_is_dropped(app, tmp_path):
     seethrough = Image.new("RGBA", (128, 96), (10, 20, 30, 255))
     seethrough.putpixel((5, 5), (10, 20, 30, 254))

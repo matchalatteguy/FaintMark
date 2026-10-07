@@ -1,4 +1,8 @@
-"""TrustMark Q encoder and decoder on ONNX Runtime, with a pinned model download."""
+"""TrustMark Q encoder and decoder on ONNX Runtime, with a pinned model download.
+
+The pre- and post-processing ports Adobe's TrustMark (https://github.com/adobe/trustmark,
+MIT, Copyright 2023 Adobe).
+"""
 
 import hashlib
 import os
@@ -10,7 +14,6 @@ import urllib.request
 from pathlib import Path
 
 import numpy as np
-import onnxruntime as ort
 from PIL import Image
 
 from .bch import N
@@ -98,6 +101,10 @@ def _paste(out, cover, wm, top, bottom, left, right):
 
 
 def _session(path):
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # official builds phone home by default
+    import onnxruntime as ort
+
+    ort.disable_telemetry_events()
     options = ort.SessionOptions()
     options.log_severity_level = 3
     return ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])

@@ -130,10 +130,10 @@ def _unused_id(db, taken):
     while True:
         value = secrets.randbits(40)
         copy_id = f"{value:010x}"
-        if copy_id not in taken and not db.execute(
-            "SELECT 1 FROM copies WHERE id = ?", (copy_id,)
-        ).fetchone():
-            taken.add(copy_id)
+        if (
+            copy_id not in taken
+            and not db.execute("SELECT 1 FROM copies WHERE id = ?", (copy_id,)).fetchone()
+        ):
             return value
 
 

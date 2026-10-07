@@ -1,0 +1,8 @@
+{
+  "name": "faintmark",
+  "version": "0.1.0",
+  "description": "Invisible per-recipient image watermarks. Mark one copy per recipient, then identify a leaked copy.",
+  "mcpServers": {
+    "faintmark": { "command": "uvx", "args": ["faintmark", "mcp"] }
+  }
+}

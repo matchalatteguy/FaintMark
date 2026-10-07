@@ -1,4 +1,5 @@
 """Shortened BCH(127,71,t=8) over GF(2^7), primitive poly x^7+x^3+1: 40 data + 56 parity bits (TrustMark BCH_SUPER)."""
+
 M, POLY, T, PARITY, DATA = 7, 0b10001001, 8, 56, 40
 N = DATA + PARITY
 EXP, LOG = [0] * 254, [0] * 128
@@ -19,7 +20,10 @@ def _generator():
     roots = {i * 2**j % 127 for i in range(1, 2 * T, 2) for j in range(M)}
     g = [1]
     for r in roots:
-        g = [(g[j - 1] if j else 0) ^ (_mul(g[j], EXP[r]) if j < len(g) else 0) for j in range(len(g) + 1)]
+        g = [
+            (g[j - 1] if j else 0) ^ (_mul(g[j], EXP[r]) if j < len(g) else 0)
+            for j in range(len(g) + 1)
+        ]
     return sum(1 << j for j, c in enumerate(g) if c)
 
 

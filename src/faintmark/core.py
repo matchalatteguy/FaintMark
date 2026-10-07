@@ -11,6 +11,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
 from typing_extensions import Required, TypedDict  # pydantic needs these before Python 3.12
 
@@ -32,10 +33,11 @@ DEFAULT_TARGET = {"JPEG": "jpeg", "PNG": "png", "WEBP": "webp", "HEIF": "jpeg"}
 EXTENSIONS = {"jpeg": ".jpg", "png": ".png", "webp": ".webp"}
 JPEG_Q92 = {"quality": 92, "subsampling": 2, "optimize": True}
 JPEG_Q95 = {"quality": 95, "subsampling": 2, "optimize": True}
-INSERT = "INSERT INTO copies VALUES (:id, :recipient, :original, :path, :at, :warnings)"
+SAME_IMAGE = 12  # max perceptual-hash distance (bits) for the picture as issued
+INSERT = "INSERT INTO copies VALUES (:id, :recipient, :original, :path, :at, :warnings, :phash)"
 SCHEMA = """CREATE TABLE IF NOT EXISTS copies (
     id TEXT PRIMARY KEY, recipient TEXT NOT NULL, original TEXT NOT NULL,
-    path TEXT NOT NULL, marked_at TEXT NOT NULL, warnings TEXT NOT NULL)"""
+    path TEXT NOT NULL, marked_at TEXT NOT NULL, warnings TEXT NOT NULL, phash TEXT)"""
 
 
 class Copy(TypedDict):
@@ -45,12 +47,13 @@ class Copy(TypedDict):
     warnings: list[str]
 
 
-class ListedCopy(TypedDict):
-    id: str
-    recipient: str
+class ListedCopy(TypedDict, total=False):
+    id: Required[str]
+    recipient: Required[str]
+    marked_at: Required[str]
+    warnings: Required[list[str]]
     original: str
-    marked_at: str
-    warnings: list[str]
+    path: str
 
 
 class MarkResult(TypedDict):
@@ -63,8 +66,10 @@ class CheckResult(TypedDict, total=False):
     status: Required[Literal["matched", "unregistered", "not_detected"]]
     id: str
     recipient: str
-    original: str
     marked_at: str
+    same_image: bool
+    original: str
+    path: str
 
 
 class ListResult(TypedDict):
@@ -118,6 +123,15 @@ def _read(path):
             if sampling in (0, 1, 2):
                 jpeg["subsampling"] = sampling
         return _rgb(image), fmt, jpeg, icc
+
+
+def _phash(image):
+    """64-bit perceptual hash: sign of the low DCT coefficients of a 32x32 grey thumbnail."""
+    grey = np.asarray(image.convert("L").resize((32, 32), Image.BILINEAR), dtype=np.float64)
+    n = np.arange(32)
+    basis = np.cos(np.pi * (2 * n[None, :] + 1) * n[:, None] / 64)
+    low = (basis @ grey @ basis.T)[:8, :8].ravel()[1:]
+    return sum(1 << i for i, above in enumerate(low > np.median(low)) if above)
 
 
 def _save(image, target, params):
@@ -178,10 +192,12 @@ class FaintMark:
         self._registry = self.home / "registry.sqlite3"
         with self._connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 2):
+            if version not in (0, 2, 3):
                 raise ValueError(f"registry version {version} is not supported by this FaintMark")
             db.execute(SCHEMA)
-            db.execute("PRAGMA user_version = 2")
+            if version == 2:
+                db.execute("ALTER TABLE copies ADD COLUMN phash TEXT")
+            db.execute("PRAGMA user_version = 3")
         with suppress(OSError):
             os.chmod(self._registry, 0o600)
 
@@ -213,6 +229,7 @@ class FaintMark:
         stem = _safe(source.stem)
         created = []
         copies = []
+        hashes = []
         with self._connect() as db:
             try:
                 for recipient in names:
@@ -234,9 +251,16 @@ class FaintMark:
                     copies.append(
                         dict(id=copy_id, recipient=recipient, path=str(path), warnings=warnings)
                     )
+                    hashes.append(f"{_phash(saved):016x}")
                 rows = [
-                    dict(c, original=source.name, at=marked_at, warnings=json.dumps(c["warnings"]))
-                    for c in copies
+                    dict(
+                        c,
+                        original=source.name,
+                        at=marked_at,
+                        warnings=json.dumps(c["warnings"]),
+                        phash=phash,
+                    )
+                    for c, phash in zip(copies, hashes)
                 ]
                 with db:
                     db.executemany(INSERT, rows)
@@ -247,46 +271,53 @@ class FaintMark:
                 raise
         return {"original": source.name, "output_dir": str(out), "copies": copies}
 
-    def check(self, image: str | Path) -> CheckResult:
+    def check(self, image: str | Path, files: bool = False) -> CheckResult:
         path = Path(image).expanduser()
         with _open(path) as opened:
             if opened.width * opened.height > MAX_CHECK_PIXELS:
                 raise ValueError(f"{path.name}: larger than 100 megapixels")
-            value = self.engine.decode(_rgb(opened))
+            rgb = _rgb(opened)
+        value = self.engine.decode(rgb)
         if value is None:
             return {"status": "not_detected"}
         copy_id = f"{value:010x}"
         with self._connect() as db:
             row = db.execute(
-                "SELECT recipient, original, marked_at FROM copies WHERE id = ?", (copy_id,)
+                "SELECT recipient, original, path, marked_at, phash FROM copies WHERE id = ?",
+                (copy_id,),
             ).fetchone()
         if row is None:
             return {"status": "unregistered", "id": copy_id}
-        recipient, original, marked_at = row
-        return {
+        recipient, original, issued, marked_at, phash = row
+        result: CheckResult = {
             "status": "matched",
             "id": copy_id,
             "recipient": recipient,
-            "original": original,
             "marked_at": marked_at,
         }
+        if phash:  # registries from before version 3 have no hash
+            distance = bin(_phash(rgb) ^ int(phash, 16)).count("1")
+            result["same_image"] = distance <= SAME_IMAGE
+        if files:
+            result.update(original=original, path=issued)
+        return result
 
-    def list_copies(self, limit: int = 100) -> ListResult:
+    def list_copies(self, limit: int = 100, files: bool = False) -> ListResult:
         with self._connect() as db:
             rows = db.execute(
-                "SELECT id, recipient, original, marked_at, warnings FROM copies "
+                "SELECT id, recipient, marked_at, warnings, original, path FROM copies "
                 "ORDER BY rowid DESC LIMIT ?",
                 (max(limit, 0),),
             ).fetchall()
-        return {
-            "copies": [
-                {
-                    "id": copy_id,
-                    "recipient": recipient,
-                    "original": original,
-                    "marked_at": marked_at,
-                    "warnings": json.loads(warnings),
-                }
-                for copy_id, recipient, original, marked_at, warnings in rows
-            ]
-        }
+        copies = []
+        for copy_id, recipient, marked_at, warnings, original, path in rows:
+            copy: ListedCopy = {
+                "id": copy_id,
+                "recipient": recipient,
+                "marked_at": marked_at,
+                "warnings": json.loads(warnings),
+            }
+            if files:
+                copy.update(original=original, path=path)
+            copies.append(copy)
+        return {"copies": copies}

@@ -40,12 +40,17 @@ def test_mark_check_and_list_human_output(home, make_image, capsys, tmp_path):
     assert err == "  warning: may not survive resizing to 64px\n" * 2
 
     code, out, _ = run(capsys, "check", alice[2])
-    pattern = rf"matched: alice  {alice[1]}  photo.png  marked \d{{4}}-\d\d-\d\dT[\d:]{{8}}Z\n"
+    pattern = rf"matched: alice  {alice[1]}  marked \d{{4}}-\d\d-\d\dT[\d:]{{8}}Z\n"
     assert code == 0 and re.fullmatch(pattern, out)
+    code, out, _ = run(capsys, "check", alice[2], "--files")
+    assert code == 0 and f"  {alice[1]}  photo.png  marked " in out
 
     code, out, _ = run(capsys, "list", "-n", 1)
     assert (code, len(out.splitlines())) == (0, 1)
-    assert out.startswith(f"{second.split()[1]}  bob  photo.png  ")
+    assert out.startswith(f"{second.split()[1]}  bob  2")
+    assert run(capsys, "list", "-n", 1, "--files")[1].startswith(
+        f"{second.split()[1]}  bob  photo.png  "
+    )
 
 
 def test_check_exits_1_without_a_match(home, make_image, capsys, tmp_path, monkeypatch):

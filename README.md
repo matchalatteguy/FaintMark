@@ -13,7 +13,7 @@ bob  746ac9fa88  /Users/me/Pictures/marked/photo-746ac9fa88.jpg
 2 copies in /Users/me/Pictures/marked
 
 $ faintmark check ~/Downloads/forwarded.jpg
-matched: alice  991e318a21  photo.jpg  marked 2026-10-06T23:11:54Z
+matched: alice  991e318a21  marked 2026-10-06T23:11:54Z
 ```
 
 Send each person only their own file; file names carry the id, not the name.
@@ -39,12 +39,13 @@ place.
 
 ```
 faintmark mark IMAGE RECIPIENT... [-o DIR] [--format png|jpeg|webp] [--json]
-faintmark check IMAGE [--json]
-faintmark list [-n N] [--json]
+faintmark check IMAGE [--files] [--json]
+faintmark list [-n N] [--files] [--json]
 ```
 
-`--json` prints the same JSON the MCP tools return. `check` exits 0 for a
-match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
+`--json` prints the same JSON the MCP tools return. Results name ids,
+recipients and times; `--files` adds file names and paths, which otherwise stay
+in the registry. `check` exits 0 for a match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
 Marking accepts JPEG, PNG, WebP and HEIC up to 25 megapixels, not animated,
 without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
 rejected), and needs about 1.5 GB of memory at that size;
@@ -74,12 +75,14 @@ Skill for any agent with a shell: `npx skills add matchalatteguy/FaintMark`
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `mark_image` | `image_path`, `recipients`, optional `output_dir`, `format` | output folder and each copy's `id`, `path`, `warnings` |
-| `check_image` | `image_path` | `status` of `matched` (with `recipient`, `id`, `original`, `marked_at`), `unregistered` (with `id`) or `not_detected` |
-| `list_copies` | optional `limit` | registered copies, newest first |
+| `check_image` | `image_path`, optional `files` | `status` of `matched` (with `recipient`, `id`, `marked_at`, `same_image`), `unregistered` (with `id`) or `not_detected` |
+| `list_copies` | optional `limit`, `files` | registered copies, newest first |
 
 Give tools absolute paths. `unregistered` means an id was read but it is not
 in this machine's registry; `not_detected` means no readable mark, which says
-nothing about where the image came from.
+nothing about where the image came from. `same_image: false` means the id is
+registered but the picture is not the one issued: a heavy crop, or an id copied
+into another image.
 
 ## How it works
 
@@ -90,8 +93,10 @@ forensic watermarking, not steganography: anyone with TrustMark can read the
 id; only your registry maps it to a name. FaintMark draws a random id per
 recipient, writes the copy in the source format (JPEG at the source's own
 quantization tables, PNG, WebP; HEIC becomes JPEG), decodes the encoded copy to
-prove the id is there, and records id, recipient and file in a local SQLite
-registry. A JPEG whose source settings lose the mark is saved at quality 95
+prove the id is there, and records id, recipient, file and a perceptual hash of
+the copy in a local SQLite registry. On a match, `check` compares the hash of
+the image in hand with the issued copy's, so an id transplanted into another
+picture is reported as `same_image: false`. A JPEG whose source settings lose the mark is saved at quality 95
 instead, and says so in its warnings. A preflight re-encodes each copy at JPEG
 quality 70, at full size and resized to 1280 px (half size when the image is
 smaller), and warns when the id does not survive; send those copies as a file
@@ -114,8 +119,9 @@ warning is the per-copy evidence.
 - `matched` means the decoded id is registered to that recipient. It does not
   prove who shared the image: copies can be forwarded.
 - `matched` is a registry lookup, not a signature. Anyone who knows an id can
-  embed it in another image, and TrustMark publishes a watermark remover; an
-  informed recipient can strip the mark.
+  embed it in another image (`same_image` catches that when the picture
+  differs, not when a copy of the same picture is re-marked), and TrustMark
+  publishes a watermark remover; an informed recipient can strip the mark.
 - Two recipients comparing their copies can locate the mark.
 - Images wider or taller than 2:1 carry the mark only in their centre square,
   so a resize that crosses 2:1 can lose it. Heavy downscaling (thumbnails,

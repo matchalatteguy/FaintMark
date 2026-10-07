@@ -85,8 +85,12 @@ def test_check_reports_each_status(app, make_image, tmp_path, monkeypatch):
         "status": "matched",
         "id": copy["id"],
         "recipient": "alice",
-        "original": "photo.png",
+        "same_image": True,
     }
+    with_files = app.check(copy["path"], files=True)
+    assert (with_files["original"], with_files["path"]) == ("photo.png", copy["path"])
+    assert "original" not in app.list_copies()["copies"][0]
+    assert app.list_copies(files=True)["copies"][0]["path"] == copy["path"]
     other = FaintMark(tmp_path / "other")
     assert other.check(copy["path"]) == {"status": "unregistered", "id": copy["id"]}
     monkeypatch.setattr(app.engine, "decode", lambda image: None)
@@ -203,3 +207,35 @@ def test_tampered_model_download_is_rejected(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="^model checksum mismatch: encoder_Q.onnx$"):
         engine.ensure_models(tmp_path / "models")
     assert list((tmp_path / "models").iterdir()) == []
+
+
+def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path):
+    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+    other = make_image("other.png", size=(160, 120))
+    with Image.open(other) as image:
+        forged = app.engine.encode(image.convert("RGB"), int(copy["id"], 16))
+    forged.save(tmp_path / "forged.png")
+    assert app.check(copy["path"])["same_image"] is True
+    assert app.check(tmp_path / "forged.png") == {
+        "status": "matched",
+        "id": copy["id"],
+        "recipient": "alice",
+        "marked_at": app.check(copy["path"])["marked_at"],
+        "same_image": False,
+    }
+
+
+def test_version_2_registries_are_upgraded(tmp_path, home):
+    home.mkdir()
+    with sqlite3.connect(home / "registry.sqlite3") as db:
+        db.execute(
+            "CREATE TABLE copies (id TEXT PRIMARY KEY, recipient TEXT NOT NULL, "
+            "original TEXT NOT NULL, path TEXT NOT NULL, marked_at TEXT NOT NULL, "
+            "warnings TEXT NOT NULL)"
+        )
+        db.execute("INSERT INTO copies VALUES ('0000000001','old','a.png','/a.png','2026','[]')")
+        db.execute("PRAGMA user_version = 2")
+    app = FaintMark()
+    with sqlite3.connect(home / "registry.sqlite3") as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert app.list_copies()["copies"][0]["recipient"] == "old"

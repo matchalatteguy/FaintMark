@@ -49,6 +49,9 @@ faintmark = "faintmark.cli:main"
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.9"]
 
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "tests"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/faintmark"]
 

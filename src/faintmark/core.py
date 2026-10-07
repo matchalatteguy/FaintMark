@@ -24,6 +24,7 @@ except ImportError:
     pass
 
 MAX_PIXELS = 25_000_000
+MAX_CHECK_PIXELS = 100_000_000
 MAX_RECIPIENTS = 100
 MAX_NAME = 200
 
@@ -98,6 +99,8 @@ def _read(path):
             raise ValueError(f"{path.name}: animated images are not supported")
         if image.width * image.height > MAX_PIXELS:
             raise ValueError(f"{path.name}: larger than 25 megapixels")
+        if image.mode in ("I", "F") or image.mode.startswith("I;16"):
+            raise ValueError(f"{path.name}: 16-bit images are not supported; convert to 8-bit")
         if (
             image.has_transparency_data
             and image.convert("RGBA").getchannel("A").getextrema()[0] < 255
@@ -144,9 +147,8 @@ def _verified(engine, marked, value, target, attempts, name):
         saved = _decoded(data)
         if engine.decode(saved) == value:
             return data, saved, attempt
-    raise RuntimeError(
-        f"{name}: watermark could not be verified in the saved copy; try --format png"
-    )
+    hint = "the image may be too small" if target == "png" else "try --format png"
+    raise RuntimeError(f"{name}: watermark could not be verified in the saved copy; {hint}")
 
 
 def _jpeg70(image):
@@ -244,7 +246,10 @@ class FaintMark:
         return {"original": source.name, "output_dir": str(out), "copies": copies}
 
     def check(self, image: str | Path) -> CheckResult:
-        with _open(Path(image).expanduser()) as opened:
+        path = Path(image).expanduser()
+        with _open(path) as opened:
+            if opened.width * opened.height > MAX_CHECK_PIXELS:
+                raise ValueError(f"{path.name}: larger than 100 megapixels")
             value = self.engine.decode(_rgb(opened))
         if value is None:
             return {"status": "not_detected"}

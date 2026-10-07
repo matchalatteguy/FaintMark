@@ -29,8 +29,8 @@ uvx faintmark mark photo.jpg alice bob   # no install, needs uv
 uv tool install faintmark                # or: pipx install faintmark
 ```
 
-Python 3.11 or newer on macOS, Linux or Windows; [uv](https://docs.astral.sh/uv/)
-is the easiest way to get it. The first `mark` or `check` downloads Adobe's
+Python 3.11 or newer on macOS, Linux or Windows (Intel Macs: 3.11 to 3.13);
+[uv](https://docs.astral.sh/uv/) is the easiest way to get it. The first `mark` or `check` downloads Adobe's
 TrustMark Q models (65 MB, SHA-256 verified) into `~/.faintmark`. iPhone HEIC
 input needs the `heic` extra: `uv tool install 'faintmark[heic]'`, or
 `uvx --from 'faintmark[heic]' faintmark mcp` for the server.
@@ -46,7 +46,9 @@ faintmark list [-n N] [--json]
 `--json` prints the same JSON the MCP tools return. `check` exits 0 for a
 match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
 Marking accepts JPEG, PNG, WebP and HEIC up to 25 megapixels, not animated,
-without transparency; `check` reads anything Pillow opens.
+without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
+rejected), and needs about 1.5 GB of memory at that size;
+`check` reads anything Pillow opens up to 100 megapixels.
 
 ## Agents
 
@@ -96,8 +98,16 @@ smaller), and warns when the id does not survive; send those copies as a file
 rather than a photo.
 
 ICC profiles are kept so Display P3 photos stay the same colour. EXIF and other
-metadata are not copied. Recovery depends on what is done to the copy; the
-preflight warning is the per-copy evidence.
+metadata are not copied.
+
+Compatibility with Adobe's own implementation is checked in: `tests/fixtures`
+holds BCH vectors and images marked by the upstream PyTorch package; our
+decoder reads them and our encoder reproduces them within one grey level. A
+chat-app style ladder in the real-model tests (resize to 1600, 1280 and 1024 px
+with JPEG 70 to 80, WebP 75, and a chained resize-plus-JPEG pass) recovers the
+id on all three test covers except WebP 75 on a 320 px cover. That is
+reproducible local evidence, not a messaging-app round trip; the preflight
+warning is the per-copy evidence.
 
 ## Limits
 
@@ -107,9 +117,9 @@ preflight warning is the per-copy evidence.
   embed it in another image, and TrustMark publishes a watermark remover; an
   informed recipient can strip the mark.
 - Two recipients comparing their copies can locate the mark.
-- Images wider or taller than 2:1 carry the mark only in their centre square.
-  Heavy downscaling (thumbnails, screenshots of previews) or cropping can
-  destroy it.
+- Images wider or taller than 2:1 carry the mark only in their centre square,
+  so a resize that crosses 2:1 can lose it. Heavy downscaling (thumbnails,
+  screenshots of previews) or cropping can destroy it.
 
 ## Registry
 

@@ -139,8 +139,13 @@ class Engine:
         residual = np.clip(stego, -1, 1) - cover
         # remove per-channel colour shift
         residual = residual - residual.mean(axis=(2, 3), keepdims=True)
-        residual = _resize(residual, h, w)[0].transpose(1, 2, 0).astype(np.float32)
-        marked = np.clip(residual + np.array(crop) / 127.5 - 1.0, -1, 1) * 127.5 + 127.5  # float64
+        # float32 and in place: the float64 expression upstream uses peaks at 2.4 GB for 25 MP
+        marked = np.ascontiguousarray(_resize(residual, h, w)[0].transpose(1, 2, 0))
+        marked += np.asarray(crop, dtype=np.float32) / np.float32(127.5)
+        marked -= 1
+        np.clip(marked, -1, 1, out=marked)
+        marked *= 127.5
+        marked += 127.5
         base = np.asarray(image, dtype=np.uint8)
         out = base.copy()
         left, top, right, bottom = box

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import anyio
 from mcp.shared.memory import create_connected_server_and_client_session
 
-from faintmark.mcp_server import create_server
+from faintmark.mcp_server import _HEAVY, create_server
 
 
 def converse(calls):
@@ -28,6 +28,7 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
     assert tools["mark_image"].inputSchema["required"] == ["image_path", "recipients"]
     assert "copies" in tools["mark_image"].outputSchema["properties"]
     assert tools["check_image"].outputSchema["required"] == ["status"]
+    assert _HEAVY.total_tokens == 1  # one inference job at a time
     assert "copies" in tools["list_copies"].outputSchema["properties"]
 
 

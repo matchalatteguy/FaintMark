@@ -18,16 +18,20 @@ def _parser():
     mark = commands.add_parser(
         "mark", parents=[output], help="Create one invisibly marked copy per recipient."
     )
-    mark.add_argument("image")
-    mark.add_argument("recipients", nargs="+", metavar="RECIPIENT")
+    mark.add_argument("image", help="JPEG, PNG, WebP or HEIC, up to 25 megapixels")
+    mark.add_argument(
+        "recipients", nargs="+", metavar="RECIPIENT", help="one label per copy (1 to 100)"
+    )
     mark.add_argument("-o", "--output", metavar="DIR", help="default: marked/ beside the image")
     mark.add_argument("--format", choices=["png", "jpeg", "webp"], help="default: the image's own")
 
     check = commands.add_parser("check", parents=[output], help="Identify which copy an image is.")
-    check.add_argument("image")
+    check.add_argument("image", help="any image Pillow can open")
 
     listing = commands.add_parser("list", parents=[output], help="List registered copies.")
-    listing.add_argument("-n", "--limit", type=int, default=100, metavar="N")
+    listing.add_argument(
+        "-n", "--limit", type=int, default=100, metavar="N", help="newest N copies (default 100)"
+    )
 
     commands.add_parser("mcp", help="Run the MCP server over stdio.")
     return parser

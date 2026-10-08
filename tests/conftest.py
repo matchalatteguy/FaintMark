@@ -2,24 +2,32 @@ import numpy as np
 import pytest
 from PIL import Image, ImageCms
 
+from faintmark import bch
+
 
 class Stub:
-    """Stores the 40-bit id as an 8x8-pixel black/white block grid, so it survives JPEG."""
+    """Stores the 96-bit codeword as a grid of 8x8 black/white blocks (12 rows by 8): it survives
+    JPEG but not halving, and decodes through BCH like the real engine."""
 
     def encode(self, image, value):
-        bits = np.array([int(bit) for bit in f"{value:040b}"], dtype=np.uint8).reshape(5, 8)
+        bits = np.array([int(c) for c in format(bch.encode(value), "096b")], dtype=np.uint8)
         pixels = np.array(image)
-        pixels[:40, :64] = np.kron(bits * 255, np.ones((8, 8), dtype=np.uint8))[..., None]
+        pixels[:96, :64] = np.kron(bits.reshape(12, 8) * 255, np.ones((8, 8), np.uint8))[..., None]
         return Image.fromarray(pixels)
 
+    def raw_bits(self, image):
+        grey = np.asarray(image.convert("L"), dtype=float)
+        if grey.shape[0] < 96 or grey.shape[1] < 64:
+            return [False] * 100
+        means = grey[:96, :64].reshape(12, 8, 8, 8).mean(axis=(1, 3))
+        return [bool(m > 127) for m in means.ravel()] + [False] * 4
+
     def decode(self, image):
-        blocks = np.asarray(image.convert("L"), dtype=float)[:40, :64].reshape(5, 8, 8, 8)
-        means = blocks.mean(axis=(1, 3))
-        if not (
-            (means < 60) | (means > 195)
-        ).all():  # no clean grid: unmarked, like the real decoder
+        bits = self.raw_bits(image)
+        if not any(bits):
             return None
-        return int("".join("1" if bit else "0" for bit in (means > 127).ravel()), 2)
+        data, ok = bch.decode(int("".join("1" if b else "0" for b in bits[:96]), 2))
+        return data if ok else None
 
 
 @pytest.fixture

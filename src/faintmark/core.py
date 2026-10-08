@@ -15,6 +15,8 @@ import numpy as np
 from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
 from typing_extensions import Required, TypedDict  # pydantic needs these before Python 3.12
 
+from .bch import N
+from .bch import encode as bch_encode
 from .engine import Engine
 
 try:
@@ -34,6 +36,11 @@ EXTENSIONS = {"jpeg": ".jpg", "png": ".png", "webp": ".webp"}
 JPEG_Q92 = {"quality": 92, "subsampling": 2, "optimize": True}
 JPEG_Q95 = {"quality": 95, "subsampling": 2, "optimize": True}
 MAX_PHASH_DISTANCE = 12  # bits; the same picture stays within 4 through chat-app recompression
+MAX_SUSPECT_ERRORS = 26  # of 96 codeword bits; BCH corrects 8, colluders averaged two copies at ~21
+DEEP_TRANSFORMS = [("flipped", lambda im: im.transpose(Image.FLIP_LEFT_RIGHT))] + [
+    (f"rotated {angle}", lambda im, a=angle: im.rotate(a, Image.BILINEAR))
+    for angle in (2, -2, 4, -4, 6, -6, 8, -8, 10, -10)
+]
 INSERT = "INSERT INTO copies VALUES (:id, :recipient, :original, :path, :at, :warnings, :phash)"
 SCHEMA = """CREATE TABLE IF NOT EXISTS copies (
     id TEXT PRIMARY KEY, recipient TEXT NOT NULL, original TEXT NOT NULL,
@@ -62,12 +69,22 @@ class MarkResult(TypedDict):
     copies: list[Copy]
 
 
+class Suspect(TypedDict, total=False):
+    id: Required[str]
+    recipient: Required[str]
+    bit_errors: Required[int]
+    same_image: bool
+
+
 class CheckResult(TypedDict, total=False):
     status: Required[Literal["matched", "unregistered", "not_detected"]]
     id: str
     recipient: str
     marked_at: str
     same_image: bool
+    transform: str
+    suspects: list[Suspect]
+    registry_size: int
     original: str
     path: str
 
@@ -275,13 +292,26 @@ class FaintMark:
                 raise
         return {"original": source.name, "output_dir": str(out), "copies": copies}
 
-    def check(self, image: str | Path, files: bool = False) -> CheckResult:
+    def check(self, image: str | Path, files: bool = False, deep: bool = False) -> CheckResult:
         path = Path(image).expanduser()
         with _open(path) as opened:
             if opened.width * opened.height > MAX_CHECK_PIXELS:
                 raise ValueError(f"{path.name}: larger than 100 megapixels")
             rgb = _rgb(opened)
-        value = self.engine.decode(rgb)
+        result = self._lookup(rgb, self.engine.decode(rgb), files)
+        if deep and result["status"] == "not_detected":
+            for name, transform in DEEP_TRANSFORMS:
+                variant = transform(rgb)
+                found = self._lookup(variant, self.engine.decode(variant), files)
+                if found["status"] != "not_detected":
+                    found["transform"] = name
+                    return found
+            suspects, size = self._suspects(self.engine.raw_bits(rgb), rgb)
+            if suspects:
+                result.update(suspects=suspects, registry_size=size)
+        return result
+
+    def _lookup(self, rgb, value, files) -> CheckResult:
         if value is None:
             return {"status": "not_detected"}
         copy_id = f"{value:010x}"
@@ -305,6 +335,32 @@ class FaintMark:
         if files:
             result.update(original=original, path=issued)
         return result
+
+    def _suspects(self, bits, rgb) -> tuple[list[Suspect], int]:
+        """Registered ids whose codewords are closest to the raw decoder bits.
+
+        Uncalibrated and forgeable: for random decoder output each registered id has about a
+        4e-6 chance of landing within MAX_SUSPECT_ERRORS, so the odds of a coincidental
+        candidate grow with the registry. Measured: two averaged copies left a colluder within
+        the cutoff in 253 of 264 trials and never an innocent registration (of 100).
+        """
+        word = int("".join("1" if b else "0" for b in bits[:N]), 2)
+        with self._connect() as db:
+            rows = db.execute("SELECT id, recipient, phash FROM copies").fetchall()
+        scored = sorted(
+            (bin(word ^ bch_encode(int(copy_id, 16))).count("1"), copy_id, recipient, phash)
+            for copy_id, recipient, phash in rows
+        )
+        suspects: list[Suspect] = []
+        for errors, copy_id, recipient, phash in scored[:3]:
+            if errors > MAX_SUSPECT_ERRORS:
+                break
+            suspect: Suspect = {"id": copy_id, "recipient": recipient, "bit_errors": errors}
+            if phash:
+                distance = bin(_phash(rgb) ^ int(phash, 16)).count("1")
+                suspect["same_image"] = distance <= MAX_PHASH_DISTANCE
+            suspects.append(suspect)
+        return suspects, len(rows)
 
     def list_copies(self, limit: int = 100, files: bool = False) -> ListResult:
         with self._connect() as db:

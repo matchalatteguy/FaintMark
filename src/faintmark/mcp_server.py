@@ -48,7 +48,8 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
     async def mark_image(
         image_path: Annotated[str, Field(description="absolute path of the image to mark")],
         recipients: Annotated[
-            list[str], Field(description="1 to 100 labels, one copy each", min_length=1)
+            list[Annotated[str, Field(min_length=1, max_length=200)]],
+            Field(description="1 to 100 labels, one copy each", min_length=1, max_length=100),
         ],
         output_dir: Annotated[
             str | None, Field(description="default: a marked/ folder beside the image")
@@ -69,16 +70,26 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "id was read but it is not in this registry) or not_detected (no readable mark, which "
             "says nothing about where the image came from). A match also reports same_image, a "
             "perceptual-hash comparison with the issued copy: false means they differ beyond the "
-            "threshold, which cropping or an id copied into another picture can cause. files=true "
-            "adds the original file name and the issued copy's path."
+            "threshold, which cropping or an id copied into another picture can cause. deep=true "
+            "also tries a flip and small rotations, and when nothing is detected lists up to "
+            "three registered ids within 26 bit errors of the raw decoder bits as suspects "
+            "(bit_errors, same_image, plus registry_size). Suspects are uncalibrated candidates "
+            "by codeword distance: they can be coincidental (more likely with a large registry) "
+            "or forged, and they never mean a match. files=true adds the original file name and "
+            "the issued copy's path."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )
     async def check_image(
         image_path: Annotated[str, Field(description="absolute path of the image to check")],
         files: Annotated[bool, Field(description="include file names and paths")] = False,
+        deep: Annotated[
+            bool, Field(description="try flips and rotations, then list suspects")
+        ] = False,
     ) -> CheckResult:
-        result = await to_thread.run_sync(get_service().check, image_path, files, limiter=_HEAVY)
+        result = await to_thread.run_sync(
+            get_service().check, image_path, files, deep, limiter=_HEAVY
+        )
         # FastMCP would fill the absent optional keys with nulls that its own outputSchema rejects
         text = TextContent(type="text", text=json.dumps(result, indent=2))
         return CallToolResult(content=[text], structuredContent=result)

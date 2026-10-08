@@ -3,6 +3,7 @@ import sqlite3
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 import pytest
 from PIL import Image, JpegImagePlugin
 
@@ -210,10 +211,11 @@ def test_tampered_model_download_is_rejected(tmp_path, monkeypatch):
 
 
 def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path):
-    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
-    other = make_image("other.png", size=(160, 120))
-    with Image.open(other) as image:
-        forged = app.engine.encode(image.convert("RGB"), int(copy["id"], 16))
+    source = make_image("photo.png", size=(512, 384))  # the stub's grid is a small part of it
+    copy = app.mark(source, ["alice"])["copies"][0]
+    with Image.open(source) as image:  # a different picture: the negative of the source
+        other = Image.fromarray(255 - np.asarray(image.convert("RGB")))
+    forged = app.engine.encode(other, int(copy["id"], 16))
     forged.save(tmp_path / "forged.png")
     assert app.check(copy["path"])["same_image"] is True
     assert app.check(tmp_path / "forged.png") == {
@@ -246,3 +248,40 @@ def test_marking_a_marked_image_replaces_the_mark_and_says_so(app, make_image):
     second = app.mark(first["path"], ["bob"])["copies"][0]
     assert second["warnings"][0] == f"replaced an existing mark, id {first['id']}"
     assert app.check(second["path"])["recipient"] == "bob"
+
+
+def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
+    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as image:
+        image.transpose(Image.FLIP_LEFT_RIGHT).save(tmp_path / "flipped.png")
+        damaged = np.array(image.convert("RGB"))
+    assert app.check(tmp_path / "flipped.png") == {"status": "not_detected"}
+    recovered = app.check(tmp_path / "flipped.png", deep=True)
+    assert (recovered["status"], recovered["recipient"], recovered["transform"]) == (
+        "matched",
+        "alice",
+        "flipped",
+    )
+
+    damaged[:16, :40] = 255 - damaged[:16, :40]  # ten grid blocks inverted: beyond BCH's eight
+    Image.fromarray(damaged).save(tmp_path / "damaged.png")
+    assert app.check(tmp_path / "damaged.png") == {"status": "not_detected"}
+    deep = app.check(tmp_path / "damaged.png", deep=True)
+    assert isinstance(deep["suspects"][0].pop("same_image"), bool)  # the stub's grid is visible
+    assert deep == {
+        "status": "not_detected",
+        "suspects": [{"id": copy["id"], "recipient": "alice", "bit_errors": 10}],
+        "registry_size": 1,
+    }
+
+
+def test_deep_check_keeps_an_unregistered_id_found_after_a_flip(app, make_image, tmp_path):
+    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as image:
+        image.transpose(Image.FLIP_LEFT_RIGHT).save(tmp_path / "flipped.png")
+    other = FaintMark(tmp_path / "other")
+    assert other.check(tmp_path / "flipped.png", deep=True) == {
+        "status": "unregistered",
+        "id": copy["id"],
+        "transform": "flipped",
+    }

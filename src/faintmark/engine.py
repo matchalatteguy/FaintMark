@@ -152,10 +152,15 @@ class Engine:
         _paste(out, base, marked, top, bottom, left, right)  # assignment into uint8 truncates
         return Image.fromarray(out)
 
-    def decode(self, image: Image.Image) -> int | None:
+    def raw_bits(self, image: Image.Image) -> list[bool]:
+        """The decoder's 100 thresholded outputs: 96 codeword bits, then 4 schema bits."""
         decoder = self._session("decoder_Q.onnx")
         crop = image.crop(_region(*image.size)).resize((DEC_RES, DEC_RES), Image.BILINEAR)
-        bits = decoder.run(None, {decoder.get_inputs()[0].name: _tensor(crop)})[0][0] > 0
+        logits = decoder.run(None, {decoder.get_inputs()[0].name: _tensor(crop)})[0][0]
+        return [bool(v > 0) for v in logits]
+
+    def decode(self, image: Image.Image) -> int | None:
+        bits = self.raw_bits(image)
         if bits[98] or bits[99]:  # schema bits must be 00
             return None
         data, ok = bch_decode(int("".join("1" if b else "0" for b in bits[:N]), 2))

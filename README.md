@@ -16,6 +16,8 @@ $ faintmark check ~/Downloads/forwarded.jpg
 matched: alice  991e318a21  marked 2026-10-06T23:11:54Z
 ```
 
+![Original photo, the copy received on WhatsApp, and faintmark check matching it](docs/hero.jpg)
+
 Send each person only their own file; file names carry the id, not the name.
 Copies are indistinguishable by eye on photographs and keep the original's
 format (HEIC becomes JPEG) and roughly its size. In the run above, a 935 KB
@@ -83,6 +85,31 @@ in this machine's registry; `not_detected` means no readable mark, which says
 nothing about where the image came from. `same_image: false` means the id is
 registered but the picture is not the one issued: a heavy crop, or an id copied
 into another image.
+
+## Tested on real apps
+
+7 October 2026, FaintMark 0.1.0. Three photos (an iPhone scene, a CC0 portrait,
+a CC0 sunset) sent through each app at its default quality and checked on what
+came back. Screenshot rows are a screenshot of the receiving phone, cropped to
+the photo before checking.
+
+| Route | Received | Result |
+| --- | --- | --- |
+| WhatsApp photo, all three photos | 1600 px, 155 to 317 KB | matched 3/3 |
+| Discord attachment | original size, 1.7 MB | matched |
+| Discord sticker made from the photo | 217x285 PNG | matched |
+| Telegram photo | 960x1280, 102 KB | matched |
+| WeChat photo, portrait and sunset | 1644 to 1920 px, 67 to 302 KB | matched 2/2 |
+| Instagram DM | 1206x804, 176 KB | matched |
+| Chat screenshots (WhatsApp, Discord, Telegram, WeChat, Instagram) | photo area 240 to 1020 px | matched 8/8 |
+| Tinder profile card (screenshot) | heavy crop | not detected |
+
+Every match also reported `same_image: true`. The originals, every received
+file, the screenshots and their crops are attached to the
+[evidence release](https://github.com/matchalatteguy/FaintMark/releases/tag/evidence-2026-10-07);
+`faintmark check` on any of them prints its id as `unregistered` on a machine
+without this registry. X, Signal, iMessage and Instagram stories were not
+tested.
 
 ## How it works
 

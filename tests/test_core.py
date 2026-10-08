@@ -211,10 +211,11 @@ def test_tampered_model_download_is_rejected(tmp_path, monkeypatch):
 
 
 def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path):
-    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
-    other = make_image("other.png", size=(160, 120))
-    with Image.open(other) as image:
-        forged = app.engine.encode(image.convert("RGB"), int(copy["id"], 16))
+    source = make_image("photo.png", size=(512, 384))  # the stub's grid is a small part of it
+    copy = app.mark(source, ["alice"])["copies"][0]
+    with Image.open(source) as image:  # a different picture: the negative of the source
+        other = Image.fromarray(255 - np.asarray(image.convert("RGB")))
+    forged = app.engine.encode(other, int(copy["id"], 16))
     forged.save(tmp_path / "forged.png")
     assert app.check(copy["path"])["same_image"] is True
     assert app.check(tmp_path / "forged.png") == {

@@ -89,6 +89,9 @@ def test_errors_exit_with_2(home, tmp_path, capsys):
     with pytest.raises(SystemExit) as usage:
         main(["mark", "photo.jpg"])
     assert usage.value.code == 2
+    with pytest.raises(SystemExit):
+        main(["mark", "photo.jpg", "--json"])
+    assert json.loads(capsys.readouterr().out)["error"].startswith("the following arguments")
 
 
 def test_version(capsys):

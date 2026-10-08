@@ -6,10 +6,18 @@ from pathlib import Path
 from . import __version__
 
 
+class _Parser(argparse.ArgumentParser):
+    json_errors = False
+
+    def error(self, message):
+        if self.json_errors:
+            print(json.dumps({"error": message}))
+            sys.exit(2)
+        super().error(message)
+
+
 def _parser():
-    parser = argparse.ArgumentParser(
-        prog="faintmark", description="Invisible per-recipient image watermarks."
-    )
+    parser = _Parser(prog="faintmark", description="Invisible per-recipient image watermarks.")
     parser.add_argument("--version", action="version", version=f"faintmark {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     output = argparse.ArgumentParser(add_help=False)
@@ -35,7 +43,8 @@ def _parser():
     check.add_argument(
         "--deep",
         action="store_true",
-        help="also try flips and small rotations, then list the closest registered ids as suspects",
+        help="also try flips and small rotations, then list the closest registered ids as "
+        "candidates (uncalibrated, never a match)",
     )
 
     listing = commands.add_parser("list", parents=[output, files], help="List registered copies.")
@@ -77,9 +86,17 @@ def _print_check(result):
         case "not_detected":
             print("not detected")
     for suspect in result.get("suspects", []):
+        picture = {True: "picture similar", False: "picture differs", None: ""}[
+            suspect.get("same_image")
+        ]
         print(
-            f"  suspect, not a match: {suspect['recipient']}  {suspect['id']}  "
-            f"{suspect['bit_errors']} of 96 bits differ"
+            f"  candidate by codeword distance, not a match: {suspect['recipient']}  "
+            f"{suspect['id']}  {suspect['bit_errors']} of 96 bits differ  {picture}".rstrip()
+        )
+    if "suspects" in result:
+        print(
+            f"  candidates can be coincidental or forged; {result['registry_size']} ids searched",
+            file=sys.stderr,
         )
 
 
@@ -92,6 +109,7 @@ def _print_list(result):
 
 
 def main(argv: list[str] | None = None) -> int:
+    _Parser.json_errors = "--json" in (sys.argv[1:] if argv is None else argv)  # subparsers too
     args = _parser().parse_args(argv)
     try:
         if args.command == "mcp":

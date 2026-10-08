@@ -49,8 +49,10 @@ labels with spaces: `faintmark mark photo.jpg 'Alice Smith'`. One run marks 1
 to 100 recipients. `--json` prints the result the matching MCP tool returns;
 `mark` includes the source file name and output paths, `check` and `list`
 omit file names and paths unless `--files` is set. `check --deep` also tries
-a flip and small rotations, and when nothing matches lists the registered ids
-closest to the raw decoder bits as suspects, never as matches. With `--json`, errors
+a flip and small rotations, and when nothing is detected lists the registered
+ids closest to the raw decoder bits as candidates with their bit distance.
+Those are uncalibrated and can be coincidental or forged; they are never a
+match. With `--json`, errors
 print `{"error": "..."}`. `check` exits 0 for `matched`, 1 for `unregistered`
 or `not_detected`, 2 for an error.
 
@@ -88,7 +90,7 @@ Choose one route per client; plugins and extensions bundle the skill too.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `mark_image` | `image_path`, `recipients`, optional `output_dir`, `format` | output folder and each copy's `id`, `path`, `warnings` |
-| `check_image` | `image_path`, optional `files`, `deep` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected`; with `deep`, `transform` when a flip or rotation was undone and `suspects` (`id`, `recipient`, `bit_errors`) when nothing matched |
+| `check_image` | `image_path`, optional `files`, `deep` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected`; with `deep`, `transform` when a flip or rotation was undone, and `suspects` (`id`, `recipient`, `bit_errors`, `same_image`) plus `registry_size` when nothing was detected |
 | `list_copies` | optional `limit`, `files` | registered copies, newest first |
 
 Give tools absolute paths. `unregistered` means an id was decoded but it is
@@ -167,10 +169,14 @@ attached to the evidence release.
 - **Overwrite it.** Re-marking with another id wins every time (last writer
   wins, 41 to 44 dB). The previous id leaves only a faint statistical trace
   that cannot be read from one image.
-- **Combine copies.** Averaging two recipients' copies defeats the plain
-  decoder every time, but `check --deep` lists the colluders as suspects:
-  in 264 of 264 trials the closest registered codeword belonged to one of
-  them (about 21 bit errors against 36 for the closest innocent).
+- **Combine copies.** Averaging two or three recipients' copies defeats the
+  plain decoder every time. Against a registry of 100 ids, the closest
+  registered codeword belonged to a colluder in 264 of 264 trials (12 to 30
+  bits away; the closest innocent was 28 to 41 away), and with the 26-bit
+  cutoff `check --deep` lists at least one colluder in 253 of 264 and never
+  an innocent. For random decoder output each registered id has about a
+  4 in a million chance of falling within the cutoff, so coincidences grow
+  with the registry.
 - **Forge the picture check.** A plain transplant of an id into another photo
   fails `same_image` (28 to 32 bits away). A tuned forgery that also nudges
   the luminance to flip the cheapest hash bits passes both checks at 27 dB
@@ -191,7 +197,8 @@ attached to the evidence release.
   the same picture. TrustMark also publishes a watermark remover; an informed
   recipient can strip the mark, and so can heavy editing.
 - Recipients who combine their copies defeat a plain `check`; `--deep`
-  reports them as suspects, which is a lead, not proof.
+  lists candidates by codeword distance, which can be coincidental or forged
+  and is never proof.
 - Images with an aspect ratio above 2:1 are marked only in their centre
   square; edits that move an image across that boundary can prevent decoding.
   Heavy downscaling and cropping destroy the mark.

@@ -69,10 +69,11 @@ class MarkResult(TypedDict):
     copies: list[Copy]
 
 
-class Suspect(TypedDict):
-    id: str
-    recipient: str
-    bit_errors: int
+class Suspect(TypedDict, total=False):
+    id: Required[str]
+    recipient: Required[str]
+    bit_errors: Required[int]
+    same_image: bool
 
 
 class CheckResult(TypedDict, total=False):
@@ -83,6 +84,7 @@ class CheckResult(TypedDict, total=False):
     same_image: bool
     transform: str
     suspects: list[Suspect]
+    registry_size: int
     original: str
     path: str
 
@@ -297,16 +299,16 @@ class FaintMark:
                 raise ValueError(f"{path.name}: larger than 100 megapixels")
             rgb = _rgb(opened)
         result = self._lookup(rgb, self.engine.decode(rgb), files)
-        if deep and result["status"] != "matched":
+        if deep and result["status"] == "not_detected":
             for name, transform in DEEP_TRANSFORMS:
                 variant = transform(rgb)
                 found = self._lookup(variant, self.engine.decode(variant), files)
-                if found["status"] == "matched":
+                if found["status"] != "not_detected":
                     found["transform"] = name
                     return found
-            suspects = self._suspects(self.engine.raw_bits(rgb))
+            suspects, size = self._suspects(self.engine.raw_bits(rgb), rgb)
             if suspects:
-                result["suspects"] = suspects
+                result.update(suspects=suspects, registry_size=size)
         return result
 
     def _lookup(self, rgb, value, files) -> CheckResult:
@@ -334,20 +336,31 @@ class FaintMark:
             result.update(original=original, path=issued)
         return result
 
-    def _suspects(self, bits) -> list[Suspect]:
-        """Registered ids whose codewords are closest to the raw decoder bits: leads, not matches."""
+    def _suspects(self, bits, rgb) -> tuple[list[Suspect], int]:
+        """Registered ids whose codewords are closest to the raw decoder bits.
+
+        Uncalibrated and forgeable: for random decoder output each registered id has about a
+        4e-6 chance of landing within MAX_SUSPECT_ERRORS, so the odds of a coincidental
+        candidate grow with the registry. Measured: two averaged copies left a colluder within
+        the cutoff in 253 of 264 trials and never an innocent registration (of 100).
+        """
         word = int("".join("1" if b else "0" for b in bits[:N]), 2)
         with self._connect() as db:
-            rows = db.execute("SELECT id, recipient FROM copies").fetchall()
+            rows = db.execute("SELECT id, recipient, phash FROM copies").fetchall()
         scored = sorted(
-            (bin(word ^ bch_encode(int(copy_id, 16))).count("1"), copy_id, recipient)
-            for copy_id, recipient in rows
+            (bin(word ^ bch_encode(int(copy_id, 16))).count("1"), copy_id, recipient, phash)
+            for copy_id, recipient, phash in rows
         )
-        return [
-            {"id": copy_id, "recipient": recipient, "bit_errors": errors}
-            for errors, copy_id, recipient in scored[:3]
-            if errors <= MAX_SUSPECT_ERRORS
-        ]
+        suspects: list[Suspect] = []
+        for errors, copy_id, recipient, phash in scored[:3]:
+            if errors > MAX_SUSPECT_ERRORS:
+                break
+            suspect: Suspect = {"id": copy_id, "recipient": recipient, "bit_errors": errors}
+            if phash:
+                distance = bin(_phash(rgb) ^ int(phash, 16)).count("1")
+                suspect["same_image"] = distance <= MAX_PHASH_DISTANCE
+            suspects.append(suspect)
+        return suspects, len(rows)
 
     def list_copies(self, limit: int = 100, files: bool = False) -> ListResult:
         with self._connect() as db:

@@ -29,7 +29,8 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
     assert tools["list_copies"].annotations.readOnlyHint is True
     assert tools["mark_image"].inputSchema["required"] == ["image_path", "recipients"]
     assert tools["check_image"].inputSchema["properties"]["files"]["default"] is False
-    assert tools["mark_image"].inputSchema["properties"]["recipients"]["minItems"] == 1
+    recipients = tools["mark_image"].inputSchema["properties"]["recipients"]
+    assert (recipients["minItems"], recipients["maxItems"]) == (1, 100)
     assert (
         "absolute path"
         in tools["mark_image"].inputSchema["properties"]["image_path"]["description"]

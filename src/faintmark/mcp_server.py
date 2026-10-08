@@ -48,7 +48,8 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
     async def mark_image(
         image_path: Annotated[str, Field(description="absolute path of the image to mark")],
         recipients: Annotated[
-            list[str], Field(description="1 to 100 labels, one copy each", min_length=1)
+            list[Annotated[str, Field(min_length=1, max_length=200)]],
+            Field(description="1 to 100 labels, one copy each", min_length=1, max_length=100),
         ],
         output_dir: Annotated[
             str | None, Field(description="default: a marked/ folder beside the image")
@@ -70,11 +71,12 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "says nothing about where the image came from). A match also reports same_image, a "
             "perceptual-hash comparison with the issued copy: false means they differ beyond the "
             "threshold, which cropping or an id copied into another picture can cause. deep=true "
-            "also tries a flip and small rotations, and when nothing matches lists up to three "
-            "registered ids whose codewords are closest to the raw decoder bits as suspects with "
-            "bit_errors; suspects are leads, not matches, and are what remains when recipients "
-            "combine their copies. files=true adds the original file name and the issued copy's "
-            "path."
+            "also tries a flip and small rotations, and when nothing is detected lists up to "
+            "three registered ids within 26 bit errors of the raw decoder bits as suspects "
+            "(bit_errors, same_image, plus registry_size). Suspects are uncalibrated candidates "
+            "by codeword distance: they can be coincidental (more likely with a large registry) "
+            "or forged, and they never mean a match. files=true adds the original file name and "
+            "the issued copy's path."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )

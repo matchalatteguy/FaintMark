@@ -265,7 +265,22 @@ def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
     damaged[:16, :40] = 255 - damaged[:16, :40]  # ten grid blocks inverted: beyond BCH's eight
     Image.fromarray(damaged).save(tmp_path / "damaged.png")
     assert app.check(tmp_path / "damaged.png") == {"status": "not_detected"}
-    assert app.check(tmp_path / "damaged.png", deep=True) == {
+    deep = app.check(tmp_path / "damaged.png", deep=True)
+    assert isinstance(deep["suspects"][0].pop("same_image"), bool)  # the stub's grid is visible
+    assert deep == {
         "status": "not_detected",
         "suspects": [{"id": copy["id"], "recipient": "alice", "bit_errors": 10}],
+        "registry_size": 1,
+    }
+
+
+def test_deep_check_keeps_an_unregistered_id_found_after_a_flip(app, make_image, tmp_path):
+    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as image:
+        image.transpose(Image.FLIP_LEFT_RIGHT).save(tmp_path / "flipped.png")
+    other = FaintMark(tmp_path / "other")
+    assert other.check(tmp_path / "flipped.png", deep=True) == {
+        "status": "unregistered",
+        "id": copy["id"],
+        "transform": "flipped",
     }

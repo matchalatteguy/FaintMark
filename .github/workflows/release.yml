@@ -2,20 +2,24 @@ name: release
 on:
   push:
     tags: ["v*"]
+permissions: {}
+concurrency:
+  group: "release-${{ github.ref }}"
+  cancel-in-progress: false
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    environment: pypi
+    timeout-minutes: 20
     permissions:
-      id-token: write
-      contents: write
+      contents: read
     env:
       FAINTMARK_HOME: ${{ github.workspace }}/.faintmark
       FAINTMARK_INTEGRATION: "1"
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-      - name: Check that every version field matches the tag
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Check that every version field and launcher pin matches the tag
         run: |
           tag="${GITHUB_REF_NAME#v}"
           for found in "$(uv version --short)" "$(jq -r .version server.json)" \
@@ -23,19 +27,74 @@ jobs:
             "$(jq -r .version .claude-plugin/plugin.json)"; do
             [ "$found" = "$tag" ] || { echo "version $found does not match tag $tag"; exit 1; }
           done
+          for f in .mcp.json gemini-extension.json; do
+            found="$(jq -r '.mcpServers.faintmark.args[0]' "$f")"
+            [ "$found" = "faintmark==$tag" ] || { echo "$f pins $found, not faintmark==$tag"; exit 1; }
+          done
       - run: uv sync --locked --extra heic
-      - run: uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run pytest -q
+      - name: Validate server.json against the registry schema
+        run: |
+          curl --fail -sL -o "$RUNNER_TEMP/server.schema.json" https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json
+          uv run --with jsonschema python -c "import json, sys; from jsonschema import validate; validate(json.load(open('server.json')), json.load(open(sys.argv[1])))" "$RUNNER_TEMP/server.schema.json"
       - run: uv build
       - name: Smoke-test the built wheel
         run: |
-          uvx --from "$(ls dist/*.whl)" faintmark mark tests/fixtures/cover.png smoke -o "$RUNNER_TEMP/smoke" --json
-          uvx --from "$(ls dist/*.whl)" faintmark check "$RUNNER_TEMP"/smoke/*.png
+          uvx --from "$(ls dist/*.whl)" faintmark mark tests/fixtures/cover.png smoke -o "$RUNNER_TEMP/smoke" --json > "$RUNNER_TEMP/mark.json"
+          uvx --from "$(ls dist/*.whl)" faintmark check "$RUNNER_TEMP"/smoke/*.png --json > "$RUNNER_TEMP/check.json"
+          python3 - "$RUNNER_TEMP" <<'PY'
+          import json, sys
+          mark, check = (json.load(open(f"{sys.argv[1]}/{n}.json")) for n in ("mark", "check"))
+          assert check["status"] == "matched" and check["recipient"] == "smoke", check
+          assert check["id"] == mark["copies"][0]["id"] and check["same_image"] is True, (mark, check)
+          PY
+      - name: Check the packaged MCP server answers initialize
+        run: |
+          python3 - "$(ls dist/*.whl)" <<'PY'
+          import json, subprocess, sys, threading
+          p = subprocess.Popen(["uvx", "--from", sys.argv[1], "faintmark", "mcp"],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+          threading.Timer(180, p.kill).start()
+          p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+              "protocolVersion": "2025-06-18", "capabilities": {},
+              "clientInfo": {"name": "smoke", "version": "0"}}}) + "\n")
+          p.stdin.flush()
+          reply = json.loads(p.stdout.readline())
+          p.terminate()
+          assert reply["result"]["serverInfo"]["name"] == "FaintMark", reply
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: dist, path: dist/, if-no-files-found: error }
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: dist, path: dist/ }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/faintmark/
-      - run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Create the GitHub release, then upload any missing assets
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+      # Rerun-safe: skip when the registry already lists this version; otherwise publish, and any failure still fails the job.
       - name: Publish to the MCP registry
         run: |
+          curl --fail -sL "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.matchalatteguy/faintmark" > registry.json
+          if jq -e --arg v "${GITHUB_REF_NAME#v}" '[.. | .version? // empty] | index($v)' registry.json >/dev/null; then
+            echo "registry already lists ${GITHUB_REF_NAME#v}; skipping"; exit 0
+          fi
           curl --fail -sL -o mcp-publisher.tar.gz \
             https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
           echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher.tar.gz" | sha256sum -c

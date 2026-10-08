@@ -33,7 +33,7 @@ DEFAULT_TARGET = {"JPEG": "jpeg", "PNG": "png", "WEBP": "webp", "HEIF": "jpeg"}
 EXTENSIONS = {"jpeg": ".jpg", "png": ".png", "webp": ".webp"}
 JPEG_Q92 = {"quality": 92, "subsampling": 2, "optimize": True}
 JPEG_Q95 = {"quality": 95, "subsampling": 2, "optimize": True}
-SAME_IMAGE = 12  # max perceptual-hash distance (bits) for the picture as issued
+MAX_PHASH_DISTANCE = 12  # bits; the same picture stays within 4 through chat-app recompression
 INSERT = "INSERT INTO copies VALUES (:id, :recipient, :original, :path, :at, :warnings, :phash)"
 SCHEMA = """CREATE TABLE IF NOT EXISTS copies (
     id TEXT PRIMARY KEY, recipient TEXT NOT NULL, original TEXT NOT NULL,
@@ -126,7 +126,7 @@ def _read(path):
 
 
 def _phash(image):
-    """64-bit perceptual hash: sign of the low DCT coefficients of a 32x32 grey thumbnail."""
+    """63 comparison bits: signs of the low DCT coefficients of a 32x32 grey thumbnail."""
     grey = np.asarray(image.convert("L").resize((32, 32), Image.BILINEAR), dtype=np.float64)
     n = np.arange(32)
     basis = np.cos(np.pi * (2 * n[None, :] + 1) * n[:, None] / 64)
@@ -227,6 +227,10 @@ class FaintMark:
         out.mkdir(parents=True, exist_ok=True)
         marked_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         stem = _safe(source.stem)
+        previous = self.engine.decode(cover)
+        replaced = (
+            [f"replaced an existing mark, id {previous:010x}"] if previous is not None else []
+        )
         created = []
         copies = []
         hashes = []
@@ -243,7 +247,7 @@ class FaintMark:
                     with open(path, "xb") as file:
                         created.append(path)
                         file.write(data)
-                    warnings = _preflight(self.engine, saved, value)
+                    warnings = replaced + _preflight(self.engine, saved, value)
                     if attempt:
                         warnings.append(
                             "saved at JPEG quality 95; the source settings lost the mark"
@@ -297,7 +301,7 @@ class FaintMark:
         }
         if phash:  # registries from before version 3 have no hash
             distance = bin(_phash(rgb) ^ int(phash, 16)).count("1")
-            result["same_image"] = distance <= SAME_IMAGE
+            result["same_image"] = distance <= MAX_PHASH_DISTANCE
         if files:
             result.update(original=original, path=issued)
         return result

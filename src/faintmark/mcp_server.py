@@ -1,10 +1,12 @@
 import json
-from typing import Literal
+from typing import Annotated, Literal
 
 from anyio import CapacityLimiter, to_thread
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import Field
 
+from . import __version__
 from .core import CheckResult, FaintMark, ListResult, MarkResult
 
 INSTRUCTIONS = (
@@ -13,13 +15,15 @@ INSTRUCTIONS = (
     "paths. 'matched' means the decoded id is registered to that recipient; it does not prove "
     "who shared the image, since copies can be forwarded and ids can be copied into other "
     "images. The mark can be removed by someone who knows it is there, so 'not_detected' says "
-    "nothing about where an image came from."
+    "nothing about where an image came from. The first mark or check downloads 65 MB of models "
+    "from Adobe."
 )
 _HEAVY = CapacityLimiter(1)  # one inference job at a time; a 25 MP copy peaks above 1 GB
 
 
 def create_server(service: FaintMark | None = None) -> FastMCP:
     server = FastMCP("FaintMark", instructions=INSTRUCTIONS)
+    server._mcp_server.version = __version__  # the SDK would report its own version
 
     def get_service():
         nonlocal service
@@ -42,10 +46,16 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
         ),
     )
     async def mark_image(
-        image_path: str,
-        recipients: list[str],
-        output_dir: str | None = None,
-        format: Literal["png", "jpeg", "webp"] | None = None,
+        image_path: Annotated[str, Field(description="absolute path of the image to mark")],
+        recipients: Annotated[
+            list[str], Field(description="1 to 100 labels, one copy each", min_length=1)
+        ],
+        output_dir: Annotated[
+            str | None, Field(description="default: a marked/ folder beside the image")
+        ] = None,
+        format: Annotated[
+            Literal["png", "jpeg", "webp"] | None, Field(description="default: the source format")
+        ] = None,
     ) -> MarkResult:
         return await to_thread.run_sync(
             get_service().mark, image_path, recipients, output_dir, format, limiter=_HEAVY
@@ -57,14 +67,17 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "up in the local registry; designed to work after chat-app recompression or resizing. "
             "status is matched (the id is registered to the returned recipient), unregistered (an "
             "id was read but it is not in this registry) or not_detected (no readable mark, which "
-            "says nothing about where the image came from). A match also reports same_image: "
-            "false means the picture is not the one issued, so the id was copied into another "
-            "image or the copy was heavily cropped. files=true adds the original file name and "
-            "the issued copy's path."
+            "says nothing about where the image came from). A match also reports same_image, a "
+            "perceptual-hash comparison with the issued copy: false means they differ beyond the "
+            "threshold, which cropping or an id copied into another picture can cause. files=true "
+            "adds the original file name and the issued copy's path."
         ),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )
-    async def check_image(image_path: str, files: bool = False) -> CheckResult:
+    async def check_image(
+        image_path: Annotated[str, Field(description="absolute path of the image to check")],
+        files: Annotated[bool, Field(description="include file names and paths")] = False,
+    ) -> CheckResult:
         result = await to_thread.run_sync(get_service().check, image_path, files, limiter=_HEAVY)
         # FastMCP would fill the absent optional keys with nulls that its own outputSchema rejects
         text = TextContent(type="text", text=json.dumps(result, indent=2))
@@ -74,7 +87,10 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
         description=("List registered copies, newest first. files=true adds file names and paths."),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     )
-    async def list_copies(limit: int = 100, files: bool = False) -> ListResult:
+    async def list_copies(
+        limit: Annotated[int, Field(description="newest N copies", ge=0)] = 100,
+        files: Annotated[bool, Field(description="include file names and paths")] = False,
+    ) -> ListResult:
         return await to_thread.run_sync(get_service().list_copies, limit, files)
 
     return server

@@ -1,10 +1,9 @@
 # FaintMark
 
-Invisible per-recipient image watermarks. Mark one copy per recipient, then
-identify a shared or leaked copy. Built for photos shared through chat apps
-(WhatsApp, iMessage, Discord, Telegram, Signal, WeChat, X) and designed to
-survive the recompression and resizing they apply. Local and free, no account,
-no upload. CLI and MCP server.
+Invisible per-recipient image watermarks. Create one marked copy per recipient,
+then identify which copy a shared or leaked image is. Designed to tolerate the
+recompression and resizing chat apps apply; see the app tests and limits
+below. Runs locally, no account, no upload. Python CLI and MCP server.
 
 ```
 $ faintmark mark photo.jpg alice bob
@@ -16,26 +15,26 @@ $ faintmark check ~/Downloads/forwarded.jpg
 matched: alice  991e318a21  marked 2026-10-06T23:11:54Z
 ```
 
-![Original photo, the copy received on WhatsApp, and faintmark check matching it](docs/hero.jpg)
+![Original scene, a WhatsApp chat screenshot of the marked copy, and CLI checks: the received copy matches, the original has no mark, a transplanted id is flagged](https://raw.githubusercontent.com/matchalatteguy/FaintMark/main/docs/hero.jpg)
 
 Send each person only their own file; file names carry the id, not the name.
-Copies are indistinguishable by eye on photographs and keep the original's
-format (HEIC becomes JPEG) and roughly its size. In the run above, a 935 KB
-JPEG gave 873 KB copies, and a half-size, quality-60 re-save of one (40 KB)
-still identified alice.
+A match identifies the label the copy was issued under, not who shared it.
+The mark is intended to be visually unobtrusive on photographs. JPEG, PNG and
+WebP keep their format; HEIC becomes JPEG.
 
 ## Install
 
 ```sh
-uvx faintmark mark photo.jpg alice bob   # no install, needs uv
+uvx faintmark mark photo.jpg alice bob   # runs without installing; needs uv
 uv tool install faintmark                # or: pipx install faintmark
 ```
 
-Python 3.11 or newer on macOS, Linux or Windows (Intel Macs: 3.11 to 3.13);
-[uv](https://docs.astral.sh/uv/) is the easiest way to get it. The first `mark` or `check` downloads Adobe's
-TrustMark Q models (65 MB, SHA-256 verified) into `~/.faintmark`. iPhone HEIC
-input needs the `heic` extra: `uv tool install 'faintmark[heic]'`, or
-`uvx --from 'faintmark[heic]' faintmark mcp` for the server.
+Python 3.11 or newer on macOS, Linux or Windows (Intel Macs: 3.11 to 3.13).
+[uv](https://docs.astral.sh/uv/) can install Python and run FaintMark. The
+first `mark` or `check` downloads Adobe's TrustMark Q models (65 MB, SHA-256
+verified) into `~/.faintmark`. For HEIC input install `faintmark[heic]`:
+`uv tool install 'faintmark[heic]'`, or without a persistent install
+`uvx --from 'faintmark[heic]' faintmark mark photo.heic alice`.
 `uv tool uninstall faintmark` removes the command and leaves `~/.faintmark` in
 place.
 
@@ -45,13 +44,18 @@ faintmark check IMAGE [--files] [--json]
 faintmark list [-n N] [--files] [--json]
 ```
 
-`--json` prints the same JSON the MCP tools return. Results name ids,
-recipients and times; `--files` adds file names and paths, which otherwise stay
-in the registry. `check` exits 0 for a match, 1 for no match, 2 for an error. One run marks 1 to 100 recipients.
-Marking accepts JPEG, PNG, WebP and HEIC up to 25 megapixels, not animated,
+Copies go into `marked/` beside the image unless `-o` says otherwise. Quote
+labels with spaces: `faintmark mark photo.jpg 'Alice Smith'`. One run marks 1
+to 100 recipients. `--json` prints the result the matching MCP tool returns;
+`mark` includes the source file name and output paths, `check` and `list`
+omit file names and paths unless `--files` is set. With `--json`, errors
+print `{"error": "..."}`. `check` exits 0 for `matched`, 1 for `unregistered`
+or `not_detected`, 2 for an error.
+
+`mark` accepts non-animated JPEG, PNG, WebP and HEIC up to 25 megapixels
 without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
-rejected), and needs about 1.5 GB of memory at that size;
-`check` reads anything Pillow opens up to 100 megapixels.
+rejected) and needs about 1.5 GB of memory at that size. `check` reads the
+first frame of anything Pillow opens, up to 100 megapixels.
 
 ## Agents
 
@@ -61,105 +65,119 @@ codex mcp add faintmark -- uvx faintmark mcp
 gemini mcp add -s user faintmark uvx faintmark mcp
 ```
 
-Any other client that reads an `mcpServers` config (Claude Desktop, Cursor, Windsurf):
+Any other client that reads an `mcpServers` config (Claude Desktop, Cursor,
+Windsurf): add this entry to the client's MCP configuration. The client must
+find `uvx` on its PATH; set `FAINTMARK_HOME` in the server's environment to
+use another registry.
 
 ```json
-{ "mcpServers": { "faintmark": { "command": "uvx", "args": ["faintmark", "mcp"] } } }
+{ "mcpServers": { "faintmark": { "type": "stdio", "command": "uvx", "args": ["faintmark", "mcp"] } } }
 ```
 
-[Add to Cursor](https://cursor.com/en/install-mcp?name=faintmark&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJmYWludG1hcmsiLCJtY3AiXX0=) ·
-[Add to VS Code](https://vscode.dev/redirect/mcp/install?name=faintmark&config=%7B%22name%22%3A%22faintmark%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22faintmark%22%2C%22mcp%22%5D%7D) ·
-Claude Code plugin: `claude plugin marketplace add matchalatteguy/FaintMark` then `claude plugin install faintmark@faintmark` ·
-Codex plugin: `codex plugin marketplace add matchalatteguy/FaintMark` then `codex plugin add faintmark@faintmark` ·
-Gemini extension: `gemini extensions install https://github.com/matchalatteguy/FaintMark` ·
-Skill for any agent with a shell: `npx skills add matchalatteguy/FaintMark`
+Choose one route per client; plugins and extensions bundle the skill too.
+
+- [Add to Cursor](https://cursor.com/en/install-mcp?name=faintmark&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJmYWludG1hcmsiLCJtY3AiXX0=)
+- [Add to VS Code](https://vscode.dev/redirect/mcp/install?name=faintmark&config=%7B%22name%22%3A%22faintmark%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22faintmark%22%2C%22mcp%22%5D%7D)
+- Claude Code plugin: `claude plugin marketplace add matchalatteguy/FaintMark` then `claude plugin install faintmark@faintmark`
+- Codex plugin: `codex plugin marketplace add matchalatteguy/FaintMark` then `codex plugin add faintmark@faintmark`
+- Gemini extension: `gemini extensions install https://github.com/matchalatteguy/FaintMark`
+- Skill for any agent with a shell: `npx skills add matchalatteguy/FaintMark`
 
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `mark_image` | `image_path`, `recipients`, optional `output_dir`, `format` | output folder and each copy's `id`, `path`, `warnings` |
-| `check_image` | `image_path`, optional `files` | `status` of `matched` (with `recipient`, `id`, `marked_at`, `same_image`), `unregistered` (with `id`) or `not_detected` |
+| `check_image` | `image_path`, optional `files` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected` |
 | `list_copies` | optional `limit`, `files` | registered copies, newest first |
 
-Give tools absolute paths. `unregistered` means an id was read but it is not
-in this machine's registry; `not_detected` means no readable mark, which says
-nothing about where the image came from. `same_image: false` means the id is
-registered but the picture is not the one issued: a heavy crop, or an id copied
-into another image.
+Give tools absolute paths. `unregistered` means an id was decoded but it is
+not in this machine's registry; `not_detected` means no readable mark, which
+says nothing about where the image came from. `same_image` compares
+perceptual hashes with the issued copy: `false` means they differ beyond the
+threshold, which cropping or an id copied into another picture can cause; the
+comparison can also miss differences.
 
 ## Tested on real apps
 
-7 October 2026, FaintMark 0.1.0. Three photos (an iPhone scene, a CC0 portrait,
-a CC0 sunset) sent through each app at its default quality and checked on what
-came back. Screenshot rows are a screenshot of the receiving phone, cropped to
-the photo before checking.
+7 October 2026, FaintMark 0.1.0, three source photos (an iPhone scene, a CC0
+portrait, a CC0 sunset). Each row reports the samples actually sent on that
+route at default photo quality. Screenshot rows are screenshots of the
+receiving phone, cropped to the photo before checking. These are individual
+round-trip observations, not recovery rates or guarantees for an app.
 
 | Route | Received | Result |
 | --- | --- | --- |
-| WhatsApp photo, all three photos | 1600 px, 155 to 317 KB | matched 3/3 |
-| Discord attachment | original size, 1.7 MB | matched |
-| Discord sticker made from the photo | 217x285 PNG | matched |
-| Telegram photo | 960x1280, 102 KB | matched |
-| WeChat photo, portrait and sunset | 1644 to 1920 px, 67 to 302 KB | matched 2/2 |
-| Instagram DM | 1206x804, 176 KB | matched |
-| Chat screenshots (WhatsApp, Discord, Telegram, WeChat, Instagram) | photo area 240 to 1020 px | matched 8/8 |
-| Tinder profile card (screenshot) | heavy crop | not detected |
+| WhatsApp photo, all three | long edge 1600 px, 155 to 317 KB | matched 3/3 |
+| Discord attachment, scene | original size, 1.7 MB | matched 1/1 |
+| Discord sticker made from the scene | 217x285 PNG | matched 1/1 |
+| Telegram photo, scene | 960x1280, 102 KB | matched 1/1 |
+| WeChat photo, portrait and sunset | long edge 1644 to 1920 px, 67 to 302 KB | matched 2/2 |
+| Instagram DM, portrait | 1206x804, 176 KB | matched 1/1 |
+| Chat screenshots on WhatsApp, Discord, Telegram, WeChat, Instagram | photo area 240 to 1020 px | matched 8/8 |
+| Tinder profile card, portrait (screenshot) | heavy crop | not detected 0/1 |
 
 Every match also reported `same_image: true`. The originals, every received
-file, the screenshots and their crops are attached to the
-[evidence release](https://github.com/matchalatteguy/FaintMark/releases/tag/evidence-2026-10-07);
-`faintmark check` on any of them prints its id as `unregistered` on a machine
-without this registry. X, Signal, iMessage and Instagram stories were not
-tested.
+file, the screenshots, the crops and a manifest of expected ids and results
+([docs/evidence-2026-10-07.json](docs/evidence-2026-10-07.json)) are in the
+[evidence release](https://github.com/matchalatteguy/FaintMark/releases/tag/evidence-2026-10-07).
+On a machine without this registry, the received files return `unregistered`
+with the id from the manifest; the originals and the Tinder crop return
+`not_detected`. X, Signal, iMessage and Instagram stories were not tested.
 
 ## How it works
 
 [TrustMark Q](https://github.com/adobe/trustmark) (Adobe, MIT) embeds a 40-bit
-id as a faint, image-wide pattern (typically 41 to 50 dB PSNR) designed to
-survive JPEG recompression, WebP conversion and moderate resizing. This is
-forensic watermarking, not steganography: anyone with TrustMark can read the
-id; only your registry maps it to a name. FaintMark draws a random id per
-recipient, writes the copy in the source format (JPEG at the source's own
-quantization tables, PNG, WebP; HEIC becomes JPEG), decodes the encoded copy to
-prove the id is there, and records id, recipient, file and a perceptual hash of
-the copy in a local SQLite registry. On a match, `check` compares the hash of
-the image in hand with the issued copy's, so an id transplanted into another
-picture is reported as `same_image: false`. A JPEG whose source settings lose the mark is saved at quality 95
-instead, and says so in its warnings. A preflight re-encodes each copy at JPEG
-quality 70, at full size and resized to 1280 px (half size when the image is
-smaller), and warns when the id does not survive; send those copies as a file
-rather than a photo.
+id as an image-wide pattern designed to tolerate JPEG recompression, WebP
+conversion and moderate resizing. This is forensic watermarking, not
+steganography: anyone with TrustMark can read the id; only your registry maps
+it to a name. FaintMark draws a random id per recipient, writes the copy in
+the source format (JPEG at the source's own quantization tables, PNG, WebP;
+HEIC becomes JPEG), decodes the saved copy to verify its id is recoverable,
+and records id, recipient, file and a perceptual hash of the copy in a local
+SQLite registry. On a registered match, `check` compares perceptual hashes
+and reports `same_image: false` when their distance exceeds the threshold. A
+JPEG whose source settings lose the mark is saved at quality 95 instead, and
+says so in its warnings. Marking an image that already carries a mark
+replaces it and says so. A preflight re-encodes each copy at JPEG quality 70,
+at full size and resized to 1280 px (half size when the image is smaller),
+and warns when the id does not survive; send those copies as a file rather
+than a photo.
 
 ICC profiles are kept so Display P3 photos stay the same colour. EXIF and other
 metadata are not copied.
 
-Compatibility with Adobe's own implementation is checked in: `tests/fixtures`
-holds BCH vectors and images marked by the upstream PyTorch package; our
-decoder reads them and our encoder reproduces them within one grey level. A
-chat-app style ladder in the real-model tests (resize to 1600, 1280 and 1024 px
-with JPEG 70 to 80, WebP 75, and a chained resize-plus-JPEG pass) recovers the
-id on all three test covers except WebP 75 on a 320 px cover. That is
-reproducible local evidence, not a messaging-app round trip; the preflight
-warning is the per-copy evidence.
+Compatibility with Adobe's implementation is checked in: `tests/fixtures`
+holds BCH vectors and two images marked by upstream TrustMark 0.9.2; FaintMark
+decodes their ids and reproduces their marked pixels within one value per RGB
+channel. A chat-app style ladder in the real-model tests (resize to 1600, 1280
+and 1024 px with JPEG 70 to 80, WebP 75, and a chained resize-plus-JPEG pass,
+on delivered JPEG bytes) recovers the id on all three test covers except WebP
+75 on a 320 px cover.
 
 ## Limits
 
 - `matched` means the decoded id is registered to that recipient. It does not
   prove who shared the image: copies can be forwarded.
 - `matched` is a registry lookup, not a signature. Anyone who knows an id can
-  embed it in another image (`same_image` catches that when the picture
-  differs, not when a copy of the same picture is re-marked), and TrustMark
-  publishes a watermark remover; an informed recipient can strip the mark.
-- Two recipients comparing their copies can locate the mark.
-- Images wider or taller than 2:1 carry the mark only in their centre square,
-  so a resize that crosses 2:1 can lose it. Heavy downscaling (thumbnails,
-  screenshots of previews) or cropping can destroy it.
+  embed it in another image. The perceptual-hash comparison may flag a
+  different picture, but cannot authenticate a copy or detect re-marking of
+  the same picture. TrustMark also publishes a watermark remover; an informed
+  recipient can strip the mark, and so can heavy editing.
+- FaintMark has no tested resistance to recipients comparing or combining
+  their copies.
+- Images with an aspect ratio above 2:1 are marked only in their centre
+  square; edits that move an image across that boundary can prevent decoding.
+  Heavy downscaling and cropping destroy the mark.
+- Results trust this machine's registry. Keep it private: anyone who can edit
+  it can change attribution.
 
 ## Registry
 
 `~/.faintmark/registry.sqlite3` maps ids to recipient names. Keep it private
-and back it up; without it a copy is `unregistered`. `FAINTMARK_HOME` selects
-another location.
+and back it up; without it, a recoverable id is reported as `unregistered`.
+`FAINTMARK_HOME` selects another directory.
 
-MIT licensed. TrustMark and its models are Adobe's, also MIT.
+MIT licensed. TrustMark and its models are Adobe's, also MIT. See
+[CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) and
+[releases](https://github.com/matchalatteguy/FaintMark/releases).
 
 <!-- mcp-name: io.github.matchalatteguy/faintmark -->

@@ -1,0 +1,469 @@
+{
+ "date": "2026-10-07",
+ "faintmark": "0.1.0",
+ "note": "status_here is the result on the registry that issued the copies; status_elsewhere is what any other machine sees. Screenshot files include the app frame and do not decode until cropped to the photo (see the cropped/ versions).",
+ "files": [
+  {
+   "file": "hard.jpg",
+   "kind": "original",
+   "pixels": [
+    4209,
+    2458
+   ],
+   "bytes": 1311524,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "portrait.jpg",
+   "kind": "original",
+   "pixels": [
+    5184,
+    3456
+   ],
+   "bytes": 3378803,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/cropped/discord-scene-sticker-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    215,
+    286
+   ],
+   "bytes": 62468,
+   "status_here": "matched",
+   "id": "3123f6f877",
+   "recipient": "discord",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/discord-scene-with-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    469,
+    626
+   ],
+   "bytes": 222665,
+   "status_here": "matched",
+   "id": "3123f6f877",
+   "recipient": "discord",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/instagram-dm-portrait-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    874,
+    583
+   ],
+   "bytes": 466333,
+   "status_here": "matched",
+   "id": "07aed32235",
+   "recipient": "instagram-dm",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/instagram-dm-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    1206,
+    804
+   ],
+   "bytes": 814040,
+   "status_here": "matched",
+   "id": "07aed32235",
+   "recipient": "instagram-dm",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/telegram-scene-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    767,
+    1022
+   ],
+   "bytes": 583578,
+   "status_here": "matched",
+   "id": "756b4105a8",
+   "recipient": "telegram",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/tinder-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    1206,
+    1610
+   ],
+   "bytes": 1454899,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/cropped/wechat-hard-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    597,
+    348
+   ],
+   "bytes": 170407,
+   "status_here": "matched",
+   "id": "10fbd24e1e",
+   "recipient": "wechat",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/wechat-portrait-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    597,
+    398
+   ],
+   "bytes": 302957,
+   "status_here": "matched",
+   "id": "964ce384f0",
+   "recipient": "wechat",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/wechat-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    1920,
+    1280
+   ],
+   "bytes": 1732754,
+   "status_here": "matched",
+   "id": "964ce384f0",
+   "recipient": "wechat",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/whatsapp-hard-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    325,
+    189
+   ],
+   "bytes": 66962,
+   "status_here": "matched",
+   "id": "269b44e027",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/whatsapp-portrait-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    332,
+    222
+   ],
+   "bytes": 113946,
+   "status_here": "matched",
+   "id": "dc7cb530fc",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/whatsapp-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    1600,
+    1067
+   ],
+   "bytes": 1760322,
+   "status_here": "matched",
+   "id": "dc7cb530fc",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/cropped/whatsapp-scene-portrait.png",
+   "kind": "screenshot crop",
+   "pixels": [
+    241,
+    321
+   ],
+   "bytes": 78054,
+   "status_here": "matched",
+   "id": "46a5ff455e",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/discord-scene-sticker-portrait.jpeg",
+   "kind": "screenshot",
+   "pixels": [
+    430,
+    394
+   ],
+   "bytes": 24149,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/discord-scene-sticker.png",
+   "kind": "received file",
+   "pixels": [
+    217,
+    285
+   ],
+   "bytes": 91274,
+   "status_here": "matched",
+   "id": "3123f6f877",
+   "recipient": "discord",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/discord-scene-with-portrait.jpeg",
+   "kind": "screenshot",
+   "pixels": [
+    626,
+    724
+   ],
+   "bytes": 61647,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/discord-scene.jpg",
+   "kind": "received file",
+   "pixels": [
+    3024,
+    4032
+   ],
+   "bytes": 1701442,
+   "status_here": "matched",
+   "id": "3123f6f877",
+   "recipient": "discord",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/forged-sunset-with-whatsapp-scene-id.jpg",
+   "kind": "forged",
+   "pixels": [
+    1600,
+    934
+   ],
+   "bytes": 143052,
+   "status_here": "matched",
+   "id": "46a5ff455e",
+   "recipient": "whatsapp",
+   "same_image": false,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/instagram-dm-portrait-portrait.jpg",
+   "kind": "screenshot",
+   "pixels": [
+    1206,
+    869
+   ],
+   "bytes": 146055,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/instagram-dm-portrait.JPG",
+   "kind": "received file",
+   "pixels": [
+    1206,
+    804
+   ],
+   "bytes": 175660,
+   "status_here": "matched",
+   "id": "07aed32235",
+   "recipient": "instagram-dm",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/telegram-scene-portrait.jpg",
+   "kind": "screenshot",
+   "pixels": [
+    1022,
+    1191
+   ],
+   "bytes": 194186,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/telegram-scene.JPG",
+   "kind": "received file",
+   "pixels": [
+    960,
+    1280
+   ],
+   "bytes": 101683,
+   "status_here": "matched",
+   "id": "756b4105a8",
+   "recipient": "telegram",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/tinder-portrait.jpg",
+   "kind": "screenshot",
+   "pixels": [
+    1206,
+    1815
+   ],
+   "bytes": 267820,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/wechat-hard-portrait.jpg",
+   "kind": "screenshot",
+   "pixels": [
+    994,
+    680
+   ],
+   "bytes": 54626,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/wechat-hard.JPG",
+   "kind": "received file",
+   "pixels": [
+    1644,
+    960
+   ],
+   "bytes": 67074,
+   "status_here": "matched",
+   "id": "10fbd24e1e",
+   "recipient": "wechat",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/wechat-portrait-portrait.jpg",
+   "kind": "screenshot",
+   "pixels": [
+    1038,
+    689
+   ],
+   "bytes": 86144,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/wechat-portrait.JPG",
+   "kind": "received file",
+   "pixels": [
+    1920,
+    1280
+   ],
+   "bytes": 301937,
+   "status_here": "matched",
+   "id": "964ce384f0",
+   "recipient": "wechat",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/whatsapp-hard-portrait.png",
+   "kind": "screenshot",
+   "pixels": [
+    382,
+    202
+   ],
+   "bytes": 15095,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/whatsapp-hard.jpeg",
+   "kind": "received file",
+   "pixels": [
+    1600,
+    934
+   ],
+   "bytes": 154740,
+   "status_here": "matched",
+   "id": "269b44e027",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/whatsapp-portrait-portrait.png",
+   "kind": "screenshot",
+   "pixels": [
+    403,
+    230
+   ],
+   "bytes": 29087,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/whatsapp-portrait.jpeg",
+   "kind": "received file",
+   "pixels": [
+    1600,
+    1066
+   ],
+   "bytes": 316768,
+   "status_here": "matched",
+   "id": "dc7cb530fc",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "received/whatsapp-scene-portrait.jpeg",
+   "kind": "screenshot",
+   "pixels": [
+    311,
+    329
+   ],
+   "bytes": 21296,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  },
+  {
+   "file": "received/whatsapp-scene.jpeg",
+   "kind": "received file",
+   "pixels": [
+    1200,
+    1600
+   ],
+   "bytes": 317131,
+   "status_here": "matched",
+   "id": "46a5ff455e",
+   "recipient": "whatsapp",
+   "same_image": true,
+   "status_elsewhere": "unregistered"
+  },
+  {
+   "file": "scene.jpeg",
+   "kind": "original",
+   "pixels": [
+    3024,
+    4032
+   ],
+   "bytes": 1866487,
+   "status_here": "not_detected",
+   "status_elsewhere": "not_detected"
+  }
+ ]
+}

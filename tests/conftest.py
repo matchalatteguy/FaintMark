@@ -14,8 +14,12 @@ class Stub:
 
     def decode(self, image):
         blocks = np.asarray(image.convert("L"), dtype=float)[:40, :64].reshape(5, 8, 8, 8)
-        bits = blocks.mean(axis=(1, 3)) > 127
-        return int("".join("1" if bit else "0" for bit in bits.ravel()), 2)
+        means = blocks.mean(axis=(1, 3))
+        if not (
+            (means < 60) | (means > 195)
+        ).all():  # no clean grid: unmarked, like the real decoder
+            return None
+        return int("".join("1" if bit else "0" for bit in (means > 127).ravel()), 2)
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "matchalatteguy" }]
-keywords = ["watermark", "invisible-watermark", "image-watermarking", "leak-tracing", "forensic-watermarking", "trustmark", "mcp", "mcp-server", "cli"]
+keywords = ["watermark", "watermarking", "invisible-watermark", "image-watermarking", "forensic-watermarking", "leak-tracing", "recipient-tracing", "trustmark", "mcp", "mcp-server", "model-context-protocol", "agent-skills", "cli"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
@@ -19,6 +19,7 @@ classifiers = [
   "Intended Audience :: End Users/Desktop",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -32,6 +33,7 @@ dependencies = [
   "numpy>=1.26",
   "pillow>=11",
   "mcp>=1.26,<2",
+  "anyio>=4",
   "typing-extensions>=4.5",
 ]
 
@@ -42,6 +44,7 @@ heic = ["pillow-heif>=1.0"]
 Homepage = "https://github.com/matchalatteguy/FaintMark"
 Repository = "https://github.com/matchalatteguy/FaintMark"
 Issues = "https://github.com/matchalatteguy/FaintMark/issues"
+Security = "https://github.com/matchalatteguy/FaintMark/blob/main/SECURITY.md"
 Changelog = "https://github.com/matchalatteguy/FaintMark/releases"
 
 [project.scripts]

@@ -81,6 +81,11 @@ def test_errors_exit_with_2(home, tmp_path, capsys):
         "",
         "faintmark: notes.txt: not an image\n",
     )
+    assert run(capsys, "mark", "missing.jpg", "alice", "--json") == (
+        2,
+        '{"error": "missing.jpg: no such file"}\n',
+        "",
+    )
     with pytest.raises(SystemExit) as usage:
         main(["mark", "photo.jpg"])
     assert usage.value.code == 2

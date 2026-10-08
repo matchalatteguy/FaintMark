@@ -41,7 +41,7 @@ def jpeg70(image):
     return Image.open(buffer).convert("RGB")
 
 
-def test_roundtrip_is_nearly_invisible(engine):
+def test_roundtrip_bounds_pixel_changes(engine):
     cover = noise(512, 512)
     for copy_id in IDS:
         marked = engine.encode(cover, copy_id)

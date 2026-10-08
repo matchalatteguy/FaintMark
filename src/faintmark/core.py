@@ -15,6 +15,8 @@ import numpy as np
 from PIL import Image, ImageOps, JpegImagePlugin, UnidentifiedImageError
 from typing_extensions import Required, TypedDict  # pydantic needs these before Python 3.12
 
+from .bch import N
+from .bch import encode as bch_encode
 from .engine import Engine
 
 try:
@@ -34,6 +36,11 @@ EXTENSIONS = {"jpeg": ".jpg", "png": ".png", "webp": ".webp"}
 JPEG_Q92 = {"quality": 92, "subsampling": 2, "optimize": True}
 JPEG_Q95 = {"quality": 95, "subsampling": 2, "optimize": True}
 MAX_PHASH_DISTANCE = 12  # bits; the same picture stays within 4 through chat-app recompression
+MAX_SUSPECT_ERRORS = 26  # of 96 codeword bits; BCH corrects 8, colluders averaged two copies at ~21
+DEEP_TRANSFORMS = [("flipped", lambda im: im.transpose(Image.FLIP_LEFT_RIGHT))] + [
+    (f"rotated {angle}", lambda im, a=angle: im.rotate(a, Image.BILINEAR))
+    for angle in (2, -2, 4, -4, 6, -6, 8, -8, 10, -10)
+]
 INSERT = "INSERT INTO copies VALUES (:id, :recipient, :original, :path, :at, :warnings, :phash)"
 SCHEMA = """CREATE TABLE IF NOT EXISTS copies (
     id TEXT PRIMARY KEY, recipient TEXT NOT NULL, original TEXT NOT NULL,
@@ -62,12 +69,20 @@ class MarkResult(TypedDict):
     copies: list[Copy]
 
 
+class Suspect(TypedDict):
+    id: str
+    recipient: str
+    bit_errors: int
+
+
 class CheckResult(TypedDict, total=False):
     status: Required[Literal["matched", "unregistered", "not_detected"]]
     id: str
     recipient: str
     marked_at: str
     same_image: bool
+    transform: str
+    suspects: list[Suspect]
     original: str
     path: str
 
@@ -275,13 +290,26 @@ class FaintMark:
                 raise
         return {"original": source.name, "output_dir": str(out), "copies": copies}
 
-    def check(self, image: str | Path, files: bool = False) -> CheckResult:
+    def check(self, image: str | Path, files: bool = False, deep: bool = False) -> CheckResult:
         path = Path(image).expanduser()
         with _open(path) as opened:
             if opened.width * opened.height > MAX_CHECK_PIXELS:
                 raise ValueError(f"{path.name}: larger than 100 megapixels")
             rgb = _rgb(opened)
-        value = self.engine.decode(rgb)
+        result = self._lookup(rgb, self.engine.decode(rgb), files)
+        if deep and result["status"] != "matched":
+            for name, transform in DEEP_TRANSFORMS:
+                variant = transform(rgb)
+                found = self._lookup(variant, self.engine.decode(variant), files)
+                if found["status"] == "matched":
+                    found["transform"] = name
+                    return found
+            suspects = self._suspects(self.engine.raw_bits(rgb))
+            if suspects:
+                result["suspects"] = suspects
+        return result
+
+    def _lookup(self, rgb, value, files) -> CheckResult:
         if value is None:
             return {"status": "not_detected"}
         copy_id = f"{value:010x}"
@@ -305,6 +333,21 @@ class FaintMark:
         if files:
             result.update(original=original, path=issued)
         return result
+
+    def _suspects(self, bits) -> list[Suspect]:
+        """Registered ids whose codewords are closest to the raw decoder bits: leads, not matches."""
+        word = int("".join("1" if b else "0" for b in bits[:N]), 2)
+        with self._connect() as db:
+            rows = db.execute("SELECT id, recipient FROM copies").fetchall()
+        scored = sorted(
+            (bin(word ^ bch_encode(int(copy_id, 16))).count("1"), copy_id, recipient)
+            for copy_id, recipient in rows
+        )
+        return [
+            {"id": copy_id, "recipient": recipient, "bit_errors": errors}
+            for errors, copy_id, recipient in scored[:3]
+            if errors <= MAX_SUSPECT_ERRORS
+        ]
 
     def list_copies(self, limit: int = 100, files: bool = False) -> ListResult:
         with self._connect() as db:

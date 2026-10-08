@@ -22,6 +22,9 @@ faintmark list --json
   error. `same_image` compares perceptual hashes with the issued copy; `false` means they differ beyond
   the threshold, which cropping or an id copied into another picture can cause. `--files` adds file
   names and paths; omit it unless needed. HEIC input is written as JPEG.
+- If a leaked copy returns `not_detected` and tampering is plausible, run `faintmark check IMAGE --deep --json`:
+  it undoes flips and small rotations, and lists `suspects` (closest registered ids with `bit_errors`).
+  Present suspects as leads, never as a match.
 - `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`);
   `not_detected` means no readable mark, for example after heavy downscaling or cropping.
 - A warning starting with "may not survive" means the copy is fragile; suggest sending it as a file

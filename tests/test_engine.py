@@ -160,3 +160,30 @@ def test_survives_a_chat_app_ladder(request, engine, cover, step, copy_id):
         request.applymarker(pytest.mark.xfail(strict=True, reason="not recovered after WebP q75"))
     delivered = reencode(engine.encode(synthetic_covers()[cover], copy_id), "JPEG", 90)
     assert engine.decode(CHAT_APP_STEPS[step](delivered)) == copy_id
+
+
+def test_deep_check_names_colluders_and_undoes_rotation(tmp_path):
+    from faintmark.core import FaintMark
+
+    home = tmp_path / "home"
+    home.mkdir()
+    ensure_models(MODELS)
+    (home / "models").symlink_to(MODELS, target_is_directory=True)
+    source = tmp_path / "photo.jpg"
+    noise(1200, 900).save(source, quality=90)
+    app = FaintMark(home)
+    copies = app.mark(source, ["alice", "bob", "carol"])["copies"]
+    a, b = (np.asarray(Image.open(c["path"]), dtype=np.float32) for c in copies[:2])
+    Image.fromarray(((a + b) / 2).round().astype(np.uint8)).save(
+        tmp_path / "averaged.jpg", quality=90
+    )
+    Image.open(copies[2]["path"]).rotate(6, Image.BILINEAR).save(
+        tmp_path / "rotated.jpg", quality=90
+    )
+
+    assert app.check(tmp_path / "averaged.jpg") == {"status": "not_detected"}
+    suspects = app.check(tmp_path / "averaged.jpg", deep=True)["suspects"]
+    assert suspects and {s["recipient"] for s in suspects} <= {"alice", "bob"}
+    rotated = app.check(tmp_path / "rotated.jpg", deep=True)
+    assert (rotated["status"], rotated["recipient"]) == ("matched", "carol")
+    assert rotated["transform"].startswith("rotated")

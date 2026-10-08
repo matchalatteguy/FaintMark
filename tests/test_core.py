@@ -3,6 +3,7 @@ import sqlite3
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 import pytest
 from PIL import Image, JpegImagePlugin
 
@@ -246,3 +247,25 @@ def test_marking_a_marked_image_replaces_the_mark_and_says_so(app, make_image):
     second = app.mark(first["path"], ["bob"])["copies"][0]
     assert second["warnings"][0] == f"replaced an existing mark, id {first['id']}"
     assert app.check(second["path"])["recipient"] == "bob"
+
+
+def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
+    copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as image:
+        image.transpose(Image.FLIP_LEFT_RIGHT).save(tmp_path / "flipped.png")
+        damaged = np.array(image.convert("RGB"))
+    assert app.check(tmp_path / "flipped.png") == {"status": "not_detected"}
+    recovered = app.check(tmp_path / "flipped.png", deep=True)
+    assert (recovered["status"], recovered["recipient"], recovered["transform"]) == (
+        "matched",
+        "alice",
+        "flipped",
+    )
+
+    damaged[:16, :40] = 255 - damaged[:16, :40]  # ten grid blocks inverted: beyond BCH's eight
+    Image.fromarray(damaged).save(tmp_path / "damaged.png")
+    assert app.check(tmp_path / "damaged.png") == {"status": "not_detected"}
+    assert app.check(tmp_path / "damaged.png", deep=True) == {
+        "status": "not_detected",
+        "suspects": [{"id": copy["id"], "recipient": "alice", "bit_errors": 10}],
+    }

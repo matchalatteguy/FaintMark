@@ -102,7 +102,7 @@ def _paste(out, cover, wm, top, bottom, left, right):
 
 
 def _load(path):
-    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # official builds phone home by default
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # before ORT initialises, see Privacy.md
     import onnxruntime as ort
 
     ort.disable_telemetry_events()

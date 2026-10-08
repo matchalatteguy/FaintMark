@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import anyio
 from mcp.shared.memory import create_connected_server_and_client_session
 
+from faintmark import __version__
 from faintmark.mcp_server import _HEAVY, create_server
 
 
@@ -19,6 +20,7 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
         return (await client.list_tools()).tools
 
     tools = {tool.name: tool for tool in converse(calls)}
+    assert create_server()._mcp_server.version == __version__
 
     assert set(tools) == {"mark_image", "check_image", "list_copies"}
     assert tools["mark_image"].annotations.readOnlyHint is False
@@ -27,6 +29,11 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
     assert tools["list_copies"].annotations.readOnlyHint is True
     assert tools["mark_image"].inputSchema["required"] == ["image_path", "recipients"]
     assert tools["check_image"].inputSchema["properties"]["files"]["default"] is False
+    assert tools["mark_image"].inputSchema["properties"]["recipients"]["minItems"] == 1
+    assert (
+        "absolute path"
+        in tools["mark_image"].inputSchema["properties"]["image_path"]["description"]
+    )
     assert "copies" in tools["mark_image"].outputSchema["properties"]
     assert tools["check_image"].outputSchema["required"] == ["status"]
     assert _HEAVY.total_tokens == 1  # one inference job at a time
@@ -60,11 +67,14 @@ def test_mark_then_check_roundtrip(home, make_image):
     assert missing.isError
 
 
-def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypatch):
-    source = make_image("photo.jpg")
+def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypatch, tmp_path):
+    from faintmark.core import FaintMark
+
+    copy = FaintMark().mark(make_image("photo.jpg"), ["alice"])["copies"][0]
+    monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "other"))
 
     async def calls(client):
-        return await client.call_tool("check_image", {"image_path": str(source)})
+        return await client.call_tool("check_image", {"image_path": copy["path"]})
 
     unregistered = converse(calls)
     assert not unregistered.isError

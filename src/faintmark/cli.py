@@ -61,8 +61,8 @@ def _print_check(result):
             )
             if result.get("same_image") is False:
                 print(
-                    f"  warning: not the picture issued to {result['recipient']}; "
-                    "the id may have been copied",
+                    "  warning: the picture differs from the issued copy; cropping or a "
+                    "copied id may explain this",
                     file=sys.stderr,
                 )
         case "unregistered":
@@ -104,7 +104,11 @@ def main(argv: list[str] | None = None) -> int:
             {"mark": _print_mark, "check": _print_check, "list": _print_list}[args.command](result)
         return code
     except FileNotFoundError as exc:
-        print(f"faintmark: {Path(exc.filename).name}: no such file", file=sys.stderr)
+        message = f"{Path(exc.filename).name}: no such file"
     except Exception as exc:
-        print(f"faintmark: {exc}", file=sys.stderr)
+        message = str(exc)
+    if args.json:
+        print(json.dumps({"error": message}))
+    else:
+        print(f"faintmark: {message}", file=sys.stderr)
     return 2

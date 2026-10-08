@@ -144,7 +144,7 @@ def test_jpeg_is_resaved_at_quality_95_when_verification_fails(app, make_image, 
 
     def fail_first(image):
         calls.append(image)
-        return None if len(calls) == 1 else decode(image)
+        return None if len(calls) == 2 else decode(image)  # call 1 inspects the cover
 
     monkeypatch.setattr(app.engine, "decode", fail_first)
     copy = app.mark(source, ["alice"])["copies"][0]
@@ -239,3 +239,10 @@ def test_version_2_registries_are_upgraded(tmp_path, home):
     with sqlite3.connect(home / "registry.sqlite3") as db:
         assert db.execute("PRAGMA user_version").fetchone()[0] == 3
     assert app.list_copies()["copies"][0]["recipient"] == "old"
+
+
+def test_marking_a_marked_image_replaces_the_mark_and_says_so(app, make_image):
+    first = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
+    second = app.mark(first["path"], ["bob"])["copies"][0]
+    assert second["warnings"][0] == f"replaced an existing mark, id {first['id']}"
+    assert app.check(second["path"])["recipient"] == "bob"

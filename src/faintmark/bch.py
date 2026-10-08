@@ -48,7 +48,9 @@ def decode(word):
                 syn[j] ^= EXP[j * d % 127]
     if not any(syn):
         return word >> PARITY, True
-    lam, prev, L, m, b = [1] + [0] * (2 * T), [1] + [0] * (2 * T), 0, 1, 1  # Berlekamp-Massey
+    # Berlekamp-Massey: lam is the error locator, prev its last copy before a length change,
+    # L its degree, m the steps since that change and b the discrepancy at that change
+    lam, prev, L, m, b = [1] + [0] * (2 * T), [1] + [0] * (2 * T), 0, 1, 1
     for n in range(2 * T):
         d = syn[n + 1]
         for i in range(1, L + 1):

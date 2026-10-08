@@ -40,7 +40,7 @@ place.
 
 ```
 faintmark mark IMAGE RECIPIENT... [-o DIR] [--format png|jpeg|webp] [--json]
-faintmark check IMAGE [--files] [--json]
+faintmark check IMAGE [--deep] [--files] [--json]
 faintmark list [-n N] [--files] [--json]
 ```
 
@@ -48,7 +48,9 @@ Copies go into `marked/` beside the image unless `-o` says otherwise. Quote
 labels with spaces: `faintmark mark photo.jpg 'Alice Smith'`. One run marks 1
 to 100 recipients. `--json` prints the result the matching MCP tool returns;
 `mark` includes the source file name and output paths, `check` and `list`
-omit file names and paths unless `--files` is set. With `--json`, errors
+omit file names and paths unless `--files` is set. `check --deep` also tries
+a flip and small rotations, and when nothing matches lists the registered ids
+closest to the raw decoder bits as suspects, never as matches. With `--json`, errors
 print `{"error": "..."}`. `check` exits 0 for `matched`, 1 for `unregistered`
 or `not_detected`, 2 for an error.
 
@@ -86,7 +88,7 @@ Choose one route per client; plugins and extensions bundle the skill too.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `mark_image` | `image_path`, `recipients`, optional `output_dir`, `format` | output folder and each copy's `id`, `path`, `warnings` |
-| `check_image` | `image_path`, optional `files` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected` |
+| `check_image` | `image_path`, optional `files`, `deep` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected`; with `deep`, `transform` when a flip or rotation was undone and `suspects` (`id`, `recipient`, `bit_errors`) when nothing matched |
 | `list_copies` | optional `limit`, `files` | registered copies, newest first |
 
 Give tools absolute paths. `unregistered` means an id was decoded but it is
@@ -153,6 +155,32 @@ and 1024 px with JPEG 70 to 80, WebP 75, and a chained resize-plus-JPEG pass,
 on delivered JPEG bytes) recovers the id on all three test covers except WebP
 75 on a 320 px cover.
 
+## Attacks we measured
+
+Someone who has this repository and a copy can do the following; measured on
+three photos at 2000 px, two ids each, full tables in the attack report
+attached to the evidence release.
+
+- **Erase the mark invisibly.** Re-running the public encoder with a random
+  payload removes it at 42 to 47 dB PSNR (6/6). `check` then says
+  `not_detected`, exactly as for an unmarked photo.
+- **Overwrite it.** Re-marking with another id wins every time (last writer
+  wins, 41 to 44 dB). The previous id leaves only a faint statistical trace
+  that cannot be read from one image.
+- **Combine copies.** Averaging two recipients' copies defeats the plain
+  decoder every time, but `check --deep` lists the colluders as suspects:
+  in 264 of 264 trials the closest registered codeword belonged to one of
+  them (about 21 bit errors against 36 for the closest innocent).
+- **Forge the picture check.** A plain transplant of an id into another photo
+  fails `same_image` (28 to 32 bits away). A tuned forgery that also nudges
+  the luminance to flip the cheapest hash bits passes both checks at 27 dB
+  PSNR, with a visible but ordinary-looking tone shift.
+- **Ordinary edits.** Blur, noise, JPEG down to quality 40, downscale to 100 px
+  and back, flips, brightness and contrast changes, a print-and-photograph
+  simulation: the mark survived all of them (6/6). Crops of 15% or more per
+  side and rotations above 4 degrees destroy it for the plain decoder;
+  `--deep` recovers rotations up to about 10 degrees.
+
 ## Limits
 
 - `matched` means the decoded id is registered to that recipient. It does not
@@ -162,8 +190,8 @@ on delivered JPEG bytes) recovers the id on all three test covers except WebP
   different picture, but cannot authenticate a copy or detect re-marking of
   the same picture. TrustMark also publishes a watermark remover; an informed
   recipient can strip the mark, and so can heavy editing.
-- FaintMark has no tested resistance to recipients comparing or combining
-  their copies.
+- Recipients who combine their copies defeat a plain `check`; `--deep`
+  reports them as suspects, which is a lead, not proof.
 - Images with an aspect ratio above 2:1 are marked only in their centre
   square; edits that move an image across that boundary can prevent decoding.
   Heavy downscaling and cropping destroy the mark.

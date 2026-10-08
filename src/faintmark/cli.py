@@ -32,6 +32,11 @@ def _parser():
         "check", parents=[output, files], help="Identify which copy an image is."
     )
     check.add_argument("image", help="any image Pillow can open")
+    check.add_argument(
+        "--deep",
+        action="store_true",
+        help="also try flips and small rotations, then list the closest registered ids as suspects",
+    )
 
     listing = commands.add_parser("list", parents=[output, files], help="List registered copies.")
     listing.add_argument(
@@ -59,6 +64,8 @@ def _print_check(result):
                 f"matched: {result['recipient']}  {result['id']}{original}  "
                 f"marked {result['marked_at']}"
             )
+            if "transform" in result:
+                print(f"  recovered after undoing: {result['transform']}")
             if result.get("same_image") is False:
                 print(
                     "  warning: the picture differs from the issued copy; cropping or a "
@@ -69,6 +76,11 @@ def _print_check(result):
             print(f"unregistered: {result['id']} is not in this registry")
         case "not_detected":
             print("not detected")
+    for suspect in result.get("suspects", []):
+        print(
+            f"  suspect, not a match: {suspect['recipient']}  {suspect['id']}  "
+            f"{suspect['bit_errors']} of 96 bits differ"
+        )
 
 
 def _print_list(result):
@@ -94,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "mark":
             result = service.mark(args.image, args.recipients, args.output, args.format)
         elif args.command == "check":
-            result = service.check(args.image, args.files)
+            result = service.check(args.image, args.files, args.deep)
             code = 0 if result["status"] == "matched" else 1
         else:
             result = service.list_copies(args.limit, args.files)

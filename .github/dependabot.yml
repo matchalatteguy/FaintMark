@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: onnxruntime   # capped by hand: no macOS x86_64 wheels after 1.23
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
     groups:
       python-minor-patch:
         patterns: ["*"]

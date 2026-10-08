@@ -1,5 +1,5 @@
 {
   "mcpServers": {
-    "faintmark": { "command": "uvx", "args": ["faintmark", "mcp"] }
+    "faintmark": { "type": "stdio", "command": "uvx", "args": ["faintmark==0.1.0", "mcp"] }
   }
 }

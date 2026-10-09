@@ -86,7 +86,7 @@ def _print_check(result):
         case "not_detected":
             print("not detected")
     if "transform" in result:
-        print(f"  recovered after undoing: {result['transform']}")
+        print(f"  recovered by: {result['transform']}")
     if "path" in result:
         print(f"  issued copy: {result['path']}")
     for suspect in result.get("suspects", []):

@@ -1,9 +1,14 @@
+import threading
 from types import SimpleNamespace
 
 import anyio
+from anyio import to_thread
+from mcp.shared.exceptions import McpError
 from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.types import CancelledNotification, CancelledNotificationParams, ClientNotification
 
 from faintmark import __version__
+from faintmark.core import FaintMark
 from faintmark.mcp_server import _HEAVY, create_server
 
 
@@ -80,8 +85,6 @@ def test_mark_then_check_roundtrip(home, make_image, monkeypatch):
 
 
 def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypatch, tmp_path):
-    from faintmark.core import FaintMark
-
     copy = FaintMark().mark(make_image("photo.jpg"), ["alice"])["copies"][0]
     monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "other"))
 
@@ -97,3 +100,54 @@ def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypat
         "faintmark.core.Engine", lambda models_dir: SimpleNamespace(decode=lambda image: None)
     )
     assert converse(calls).structuredContent == {"status": "not_detected"}
+
+
+def test_a_cancelled_mark_removes_its_files_and_the_server_survives(home, make_image, monkeypatch):
+    service = FaintMark()
+    source = make_image("photo.png")
+    started, release, done = threading.Event(), threading.Event(), threading.Event()
+    encode, mark = service.engine.encode, service.mark
+
+    def slow_encode(image, value):
+        started.set()
+        release.wait(5)
+        return encode(image, value)
+
+    def mark_then_signal(*args):
+        try:
+            return mark(*args)
+        finally:
+            done.set()
+
+    monkeypatch.setattr(service.engine, "encode", slow_encode)
+    monkeypatch.setattr(service, "mark", mark_then_signal)
+
+    async def session():
+        async with create_connected_server_and_client_session(create_server(service)) as client:
+            request_id = client._request_id  # the id the next request will carry
+            outcome = []
+
+            async def mark_copies():
+                try:
+                    await client.call_tool(
+                        "mark_image", {"image_path": str(source), "recipients": ["alice", "bob"]}
+                    )
+                except McpError as error:
+                    outcome.append(error.error.message)
+
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(mark_copies)
+                await to_thread.run_sync(started.wait, 5)
+                cancel = CancelledNotification(
+                    method="notifications/cancelled",
+                    params=CancelledNotificationParams(requestId=request_id),
+                )
+                await client.send_notification(ClientNotification(cancel))
+                release.set()
+            await to_thread.run_sync(done.wait, 5)
+            return outcome, await client.call_tool("list_copies", {})
+
+    outcome, listed = anyio.run(session)
+    assert outcome == ["Request cancelled"]
+    assert listed.structuredContent == {"copies": []}
+    assert list((source.parent / "marked").iterdir()) == []

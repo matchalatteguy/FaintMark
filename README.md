@@ -92,7 +92,7 @@ the bundled launchers use the base package.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `mark_image` | `image_path`, `recipients`, optional `output_dir`, `format` | output folder and each copy's `id`, `path`, `warnings` |
-| `check_image` | `image_path`, optional `files`, `deep` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected`; with `deep`, `transform` when a flip or rotation was undone, and `suspects` (`id`, `recipient`, `bit_errors`, `same_image`) plus `registry_size` when nothing was detected |
+| `check_image` | `image_path`, optional `files`, `deep` | `status` of `matched` (with `recipient`, `id`, `marked_at`, and `same_image` when a stored hash exists), `unregistered` (with `id`) or `not_detected`; with `deep`, `transform` naming the flip or rotation that recovered the result, and `suspects` (`id`, `recipient`, `bit_errors`, `same_image`) plus `registry_size` when nothing was detected |
 | `list_copies` | optional `limit`, `files` | registered copies, newest first |
 
 Give tools absolute paths. `unregistered` means an id was decoded but it is
@@ -103,13 +103,15 @@ threshold, which cropping or an id copied into another picture can cause; the
 comparison can also miss differences.
 
 `check_image` and `faintmark check --json` return one of these: the three
-plain statuses; with `deep`, a result recovered by undoing a transform, or a
+plain statuses (a match with `same_image: false` means the picture differs
+from the issued copy); with `deep`, a result recovered by a transform, or a
 miss with candidates (`suspects` is empty when no registered id is within the
 cutoff). The CLI prints errors as the last line; MCP tools raise them as tool
 errors (`isError`) carrying the same message.
 
 ```
 {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
+{"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": false}
 {"status": "unregistered", "id": "3123f6f877"}
 {"status": "not_detected"}
 {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true, "transform": "rotated 4"}

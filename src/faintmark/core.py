@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+from collections.abc import Callable
 from contextlib import closing, suppress
 from datetime import datetime, timezone
 from io import BytesIO
@@ -232,6 +233,7 @@ class FaintMark:
         recipients: list[str],
         output_dir: str | Path | None = None,
         format: Literal["png", "jpeg", "webp"] | None = None,
+        cancelled: Callable[[], bool] | None = None,
     ) -> MarkResult:
         names = [name.strip() for name in recipients]
         if not 1 <= len(names) <= MAX_RECIPIENTS:
@@ -255,9 +257,17 @@ class FaintMark:
         created = []
         copies = []
         hashes = []
+
+        def checkpoint():
+            if cancelled and cancelled():
+                raise RuntimeError(
+                    f"{source.name}: cancelled; the copies written so far were removed"
+                )
+
         with self._connect() as db:
             try:
                 for recipient in names:
+                    checkpoint()
                     value = _unused_id(db, {c["id"] for c in copies})
                     copy_id = f"{value:010x}"
                     marked = self.engine.encode(cover.copy(), value)
@@ -287,6 +297,7 @@ class FaintMark:
                     )
                     for c, phash in zip(copies, hashes)
                 ]
+                checkpoint()
                 with db:
                     db.executemany(INSERT, rows)
             except BaseException:

@@ -20,6 +20,7 @@ faintmark check /abs/received.jpg --json           # status: matched | unregiste
 # {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
 # {"status": "unregistered", "id": "3123f6f877"}  or  {"status": "not_detected"}
 faintmark list --json
+# MCP: mark_image {"image_path": "/abs/photo.jpg", "recipients": ["alice", "bob"]}   check_image {"image_path": "/abs/received.jpg", "deep": true}
 # {"copies": [{"id": "746ac9fa88", "recipient": "bob", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}, {"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
 ```
 
@@ -31,10 +32,10 @@ faintmark list --json
   into another picture can cause. `true` is not authentication; a tuned forgery passed it in our
   measurements. `--files` adds file names and paths; omit it unless needed. HEIC input is written as JPEG.
 - If a leaked copy returns `not_detected` and tampering is plausible, run `faintmark check IMAGE --deep --json`:
-  it undoes flips and small rotations, and otherwise lists `suspects` (`id`, `recipient`, `bit_errors`,
+  it tries a flip and small rotations (`transform` names the one that worked), and otherwise lists `suspects` (`id`, `recipient`, `bit_errors`,
   `same_image`), up to three registered ids within 26 of 96 codeword bits of the raw decoder output, empty
   when none is that close, and `registry_size`. Suspects are uncalibrated candidates: they can be coincidental
-  or forged. Say "the closest registered id is X, N bits away", never "X".
+  or forged. Say "the closest registered id is X, N bits away"; do not attribute the image to X.
 - `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`,
   or `FAINTMARK_HOME`); `not_detected` means no readable mark, for example after heavy downscaling or
   cropping, or a chat screenshot that still includes the app frame: crop it to the photo and check again.

@@ -3,7 +3,9 @@ import re
 from importlib.metadata import version
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from faintmark.cli import main
 
@@ -44,13 +46,14 @@ def test_mark_check_and_list_human_output(home, make_image, capsys, tmp_path):
     assert code == 0 and re.fullmatch(pattern, out)
     code, out, _ = run(capsys, "check", alice[2], "--files")
     assert code == 0 and f"  {alice[1]}  photo.png  marked " in out
+    assert out.endswith(f"\n  issued copy: {alice[2]}\n")
 
     code, out, _ = run(capsys, "list", "-n", 1)
     assert (code, len(out.splitlines())) == (0, 1)
     assert out.startswith(f"{second.split()[1]}  bob  2")
-    assert run(capsys, "list", "-n", 1, "--files")[1].startswith(
-        f"{second.split()[1]}  bob  photo.png  "
-    )
+    files = run(capsys, "list", "-n", 1, "--files")[1]
+    assert files.startswith(f"{second.split()[1]}  bob  photo.png  ")
+    assert files.endswith(f"  {second.split()[2]}\n")
 
 
 def test_check_exits_1_without_a_match(home, make_image, capsys, tmp_path, monkeypatch):
@@ -69,7 +72,42 @@ def test_check_exits_1_without_a_match(home, make_image, capsys, tmp_path, monke
     assert run(capsys, "check", path, "--json") == (1, '{\n  "status": "not_detected"\n}\n', "")
 
 
-def test_errors_exit_with_2(home, tmp_path, capsys):
+def test_check_prints_deep_results(home, make_image, capsys, tmp_path, monkeypatch):
+    out_dir = tmp_path / "out"
+    first = run(capsys, "mark", make_image("photo.png"), "alice", "-o", out_dir)[1].splitlines()[0]
+    _, copy_id, path = first.split()
+    with Image.open(path) as image:
+        image.transpose(Image.FLIP_LEFT_RIGHT).save(tmp_path / "flipped.png")
+        damaged = np.array(image.convert("RGB"))
+    damaged[:16, :40] = 255 - damaged[:16, :40]
+    Image.fromarray(damaged).save(tmp_path / "damaged.png")
+
+    monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "other"))
+    assert run(capsys, "check", tmp_path / "flipped.png", "--deep") == (
+        1,
+        f"unregistered: {copy_id} is not in this registry\n  recovered after undoing: flipped\n",
+        "",
+    )
+
+    monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "home"))
+    code, out, err = run(capsys, "check", tmp_path / "damaged.png", "--deep")
+    assert code == 1
+    assert re.fullmatch(
+        r"not detected\n  candidate by codeword distance, not a match: "
+        rf"alice  {copy_id}  10 of 96 bits differ  picture (similar|differs)\n",
+        out,
+    )
+    assert err == "  candidates can be coincidental or forged; 1 ids searched\n"
+
+    monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "empty"))
+    assert run(capsys, "check", tmp_path / "damaged.png", "--deep") == (
+        1,
+        "not detected\n  no candidates by codeword distance; 0 ids searched\n",
+        "",
+    )
+
+
+def test_errors_exit_with_2(home, tmp_path, capsys, monkeypatch):
     assert run(capsys, "mark", "missing.jpg", "alice") == (
         2,
         "",
@@ -92,6 +130,12 @@ def test_errors_exit_with_2(home, tmp_path, capsys):
     with pytest.raises(SystemExit):
         main(["mark", "photo.jpg", "--json"])
     assert json.loads(capsys.readouterr().out)["error"].startswith("the following arguments")
+
+    def boom():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("faintmark.mcp_server.run", boom)
+    assert run(capsys, "mcp") == (2, "", "faintmark: boom\n")
 
 
 def test_version(capsys):

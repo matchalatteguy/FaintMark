@@ -102,7 +102,8 @@ def _paste(out, cover, wm, top, bottom, left, right):
 
 
 def _load(path):
-    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")  # before ORT initialises, see Privacy.md
+    # must be set before onnxruntime is imported
+    os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
     import onnxruntime as ort
 
     ort.disable_telemetry_events()

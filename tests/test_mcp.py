@@ -15,7 +15,7 @@ def converse(calls):
     return anyio.run(session)
 
 
-def test_tools_are_declared_with_annotations_and_output_schemas(home):
+def test_tools_are_declared_with_annotations_and_output_schemas():
     async def calls(client):
         return (await client.list_tools()).tools
 
@@ -43,6 +43,7 @@ def test_tools_are_declared_with_annotations_and_output_schemas(home):
 
 def test_mark_then_check_roundtrip(home, make_image):
     source = make_image("photo.jpg", quality=85, subsampling=2)
+    unmarked = make_image("small.png", size=(64, 48))  # too small for the stub to read at any angle
 
     async def calls(client):
         empty = await client.call_tool("list_copies", {})
@@ -53,9 +54,12 @@ def test_mark_then_check_roundtrip(home, make_image):
         checked = await client.call_tool("check_image", {"image_path": path})
         listed = await client.call_tool("list_copies", {"limit": 1})
         missing = await client.call_tool("check_image", {"image_path": str(source) + ".gone"})
-        return empty, marked, checked, listed, missing
+        deep = await client.call_tool(
+            "check_image", {"image_path": str(unmarked), "deep": True, "files": True}
+        )
+        return empty, marked, checked, listed, missing, deep
 
-    empty, marked, checked, listed, missing = converse(calls)
+    empty, marked, checked, listed, missing, deep = converse(calls)
 
     assert empty.structuredContent == {"copies": []}
     copies = marked.structuredContent["copies"]
@@ -66,6 +70,11 @@ def test_mark_then_check_roundtrip(home, make_image):
     assert "path" not in checked.structuredContent
     assert [copy["id"] for copy in listed.structuredContent["copies"]] == [copies[1]["id"]]
     assert missing.isError
+    assert deep.structuredContent == {
+        "status": "not_detected",
+        "suspects": [],
+        "registry_size": 2,
+    }
 
 
 def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypatch, tmp_path):

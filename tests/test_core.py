@@ -174,6 +174,9 @@ def test_input_limits(app, make_image, tmp_path, monkeypatch):
     with pytest.raises(ValueError, match=r"^icon.gif: unsupported format GIF; use JPEG, PNG"):
         app.mark(tmp_path / "icon.gif", ["alice"])
 
+    with pytest.raises(ValueError, match="^limit must be 0 or more$"):
+        app.list_copies(-1)
+
     monkeypatch.setattr("faintmark.core.MAX_PIXELS", 100)
     with pytest.raises(ValueError, match="^photo.png: larger than 25 megapixels$"):
         app.mark(source, ["alice"])
@@ -227,20 +230,12 @@ def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path)
     }
 
 
-def test_version_2_registries_are_upgraded(tmp_path, home):
+def test_unsupported_registry_versions_are_refused(home):
     home.mkdir()
     with sqlite3.connect(home / "registry.sqlite3") as db:
-        db.execute(
-            "CREATE TABLE copies (id TEXT PRIMARY KEY, recipient TEXT NOT NULL, "
-            "original TEXT NOT NULL, path TEXT NOT NULL, marked_at TEXT NOT NULL, "
-            "warnings TEXT NOT NULL)"
-        )
-        db.execute("INSERT INTO copies VALUES ('0000000001','old','a.png','/a.png','2026','[]')")
-        db.execute("PRAGMA user_version = 2")
-    app = FaintMark()
-    with sqlite3.connect(home / "registry.sqlite3") as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
-    assert app.list_copies()["copies"][0]["recipient"] == "old"
+        db.execute("PRAGMA user_version = 7")
+    with pytest.raises(ValueError, match="^registry version 7 is not supported"):
+        FaintMark()
 
 
 def test_marking_a_marked_image_replaces_the_mark_and_says_so(app, make_image):
@@ -272,6 +267,11 @@ def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
         "status": "not_detected",
         "suspects": [{"id": copy["id"], "recipient": "alice", "bit_errors": 10}],
         "registry_size": 1,
+    }
+    assert FaintMark(tmp_path / "other").check(tmp_path / "damaged.png", deep=True) == {
+        "status": "not_detected",
+        "suspects": [],
+        "registry_size": 0,
     }
 
 

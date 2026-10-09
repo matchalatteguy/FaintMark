@@ -99,7 +99,7 @@ def _open(path):
     except UnidentifiedImageError:
         if path.suffix.lower() in (".heic", ".heif") and "HEIF" not in Image.OPEN:
             raise ValueError(
-                f"{path.name}: HEIC needs the heic extra (uv tool install 'faintmark[heic]')"
+                f"{path.name}: HEIC needs the heic extra (install faintmark[heic])"
             ) from None
         raise ValueError(f"{path.name}: not an image") from None
 
@@ -209,11 +209,9 @@ class FaintMark:
         self._registry = self.home / "registry.sqlite3"
         with self._connect() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 2, 3):
+            if version not in (0, 3):
                 raise ValueError(f"registry version {version} is not supported by this FaintMark")
             db.execute(SCHEMA)
-            if version == 2:
-                db.execute("ALTER TABLE copies ADD COLUMN phash TEXT")
             db.execute("PRAGMA user_version = 3")
         with suppress(OSError):
             os.chmod(self._registry, 0o600)
@@ -307,8 +305,7 @@ class FaintMark:
                     found["transform"] = name
                     return found
             suspects, size = self._suspects(self.engine.raw_bits(rgb), rgb)
-            if suspects:
-                result.update(suspects=suspects, registry_size=size)
+            result.update(suspects=suspects, registry_size=size)
         return result
 
     def _lookup(self, rgb, value, files) -> CheckResult:
@@ -329,7 +326,7 @@ class FaintMark:
             "recipient": recipient,
             "marked_at": marked_at,
         }
-        if phash:  # registries from before version 3 have no hash
+        if phash:  # rows registered before version 3 have no hash
             distance = bin(_phash(rgb) ^ int(phash, 16)).count("1")
             result["same_image"] = distance <= MAX_PHASH_DISTANCE
         if files:
@@ -363,11 +360,13 @@ class FaintMark:
         return suspects, len(rows)
 
     def list_copies(self, limit: int = 100, files: bool = False) -> ListResult:
+        if limit < 0:
+            raise ValueError("limit must be 0 or more")
         with self._connect() as db:
             rows = db.execute(
                 "SELECT id, recipient, marked_at, warnings, original, path FROM copies "
                 "ORDER BY rowid DESC LIMIT ?",
-                (max(limit, 0),),
+                (limit,),
             ).fetchall()
         copies = []
         for copy_id, recipient, marked_at, warnings, original, path in rows:

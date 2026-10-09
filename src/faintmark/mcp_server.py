@@ -41,9 +41,10 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "Create one invisibly watermarked copy of an image per recipient label and register "
             "them locally. Use before sharing a picture with several people so a copy that turns "
             "up later can be traced to the label it was issued under. Writes files only and sends "
-            "nothing; keeps the source format (JPEG stays JPEG). Accepts JPEG, PNG, WebP or HEIC "
-            "(HEIC only when the server runs with the heic extra) up to 25 megapixels, without "
-            "transparency or CMYK, and 1 to 100 recipient labels. Returns the output folder and "
+            "nothing; keeps the source format (JPEG stays JPEG; HEIC becomes JPEG). Accepts JPEG, "
+            "PNG, WebP or HEIC (HEIC only when the server runs with the heic extra) up to 25 "
+            "megapixels, with no animation, transparency, CMYK or 16-bit grayscale, and 1 to 100 "
+            "labels of 1 to 200 printable characters. Returns the output folder and "
             "each copy's path, id and warnings. A warning starting with 'may not survive' means "
             "the copy is fragile, so suggest sending it as a file rather than a photo. Cancelling "
             "the call stops it at the next copy and removes the copies written so far; a batch "
@@ -111,9 +112,19 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             bool, Field(description="try flips and rotations, then list suspects")
         ] = False,
     ) -> CheckResult:
-        result = await to_thread.run_sync(
-            _serialized, get_service().check, image_path, files, deep, abandon_on_cancel=True
-        )
+        stop = threading.Event()
+        try:
+            result = await to_thread.run_sync(
+                _serialized,
+                get_service().check,
+                image_path,
+                files,
+                deep,
+                stop.is_set,
+                abandon_on_cancel=True,
+            )
+        finally:
+            stop.set()
         # FastMCP would fill the absent optional keys with nulls that its own outputSchema rejects
         text = TextContent(type="text", text=json.dumps(result, indent=2))
         return CallToolResult(content=[text], structuredContent=result)

@@ -26,15 +26,15 @@ out of commits. Small synthetic compatibility fixtures are welcome.
 
 ## Releasing
 
-1. Start from a green `main`; note user-visible changes and anything that
-   affects decoding or registry compatibility.
+1. Start from a green `main`; check that the merged pull request titles
+   describe the user-visible changes and anything that affects decoding or
+   registry compatibility.
 2. Bump the version in `pyproject.toml`, `server.json`,
    `gemini-extension.json`, `.claude-plugin/plugin.json` and the pinned
    launchers in `.mcp.json` and `gemini-extension.json`; run `uv lock`.
 3. Run the commands above; `uv build` and check both distributions.
-4. Write release notes by hand (what changed for users, compatibility).
-5. Tag `vX.Y.Z` and push the tag; the release workflow publishes to PyPI,
-   creates the GitHub release and publishes to the MCP registry.
-6. Verify a fresh `uvx faintmark --version`, the PyPI page and the registry
-   entry. If a step failed, rerun the workflow; it skips what already exists.
-```
+4. Tag `vX.Y.Z` and push the tag; the release workflow publishes to PyPI,
+   creates the GitHub release with notes generated from the merged pull
+   requests, and publishes to the MCP registry.
+5. Verify a fresh `uvx faintmark --version`, the PyPI page and the registry
+   entry. If a step failed, rerun the workflow; every step is safe to repeat.

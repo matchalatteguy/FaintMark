@@ -73,8 +73,6 @@ def _print_check(result):
                 f"matched: {result['recipient']}  {result['id']}{original}  "
                 f"marked {result['marked_at']}"
             )
-            if "transform" in result:
-                print(f"  recovered after undoing: {result['transform']}")
             if result.get("same_image") is False:
                 print(
                     "  warning: the picture differs from the issued copy; cropping or a "
@@ -85,6 +83,10 @@ def _print_check(result):
             print(f"unregistered: {result['id']} is not in this registry")
         case "not_detected":
             print("not detected")
+    if "transform" in result:
+        print(f"  recovered after undoing: {result['transform']}")
+    if "path" in result:
+        print(f"  issued copy: {result['path']}")
     for suspect in result.get("suspects", []):
         picture = {True: "picture similar", False: "picture differs", None: ""}[
             suspect.get("same_image")
@@ -93,17 +95,20 @@ def _print_check(result):
             f"  candidate by codeword distance, not a match: {suspect['recipient']}  "
             f"{suspect['id']}  {suspect['bit_errors']} of 96 bits differ  {picture}".rstrip()
         )
-    if "suspects" in result:
+    if result.get("suspects"):
         print(
             f"  candidates can be coincidental or forged; {result['registry_size']} ids searched",
             file=sys.stderr,
         )
+    elif "suspects" in result:
+        print(f"  no candidates by codeword distance; {result['registry_size']} ids searched")
 
 
 def _print_list(result):
     for copy in result["copies"]:
         original = f"  {copy['original']}" if "original" in copy else ""
-        print(f"{copy['id']}  {copy['recipient']}{original}  {copy['marked_at']}")
+        path = f"  {copy['path']}" if "path" in copy else ""
+        print(f"{copy['id']}  {copy['recipient']}{original}  {copy['marked_at']}{path}")
     if not result["copies"]:
         print("no copies")
 
@@ -111,6 +116,7 @@ def _print_list(result):
 def main(argv: list[str] | None = None) -> int:
     _Parser.json_errors = "--json" in (sys.argv[1:] if argv is None else argv)  # subparsers too
     args = _parser().parse_args(argv)
+    as_json = getattr(args, "json", False)
     try:
         if args.command == "mcp":
             from .mcp_server import run
@@ -128,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             code = 0 if result["status"] == "matched" else 1
         else:
             result = service.list_copies(args.limit, args.files)
-        if args.json:
+        if as_json:
             print(json.dumps(result, indent=2))
         else:
             {"mark": _print_mark, "check": _print_check, "list": _print_list}[args.command](result)
@@ -137,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         message = f"{Path(exc.filename).name}: no such file"
     except Exception as exc:
         message = str(exc)
-    if args.json:
+    if as_json:
         print(json.dumps({"error": message}))
     else:
         print(f"faintmark: {message}", file=sys.stderr)

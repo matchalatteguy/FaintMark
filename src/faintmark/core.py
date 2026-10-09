@@ -96,6 +96,8 @@ class ListResult(TypedDict):
 def _open(path):
     try:
         return Image.open(path)
+    except FileNotFoundError:
+        raise ValueError(f"{path.name}: no such file") from None
     except UnidentifiedImageError:
         if path.suffix.lower() in (".heic", ".heif") and "HEIF" not in Image.OPEN:
             raise ValueError(

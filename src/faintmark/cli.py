@@ -1,7 +1,6 @@
 import argparse
 import json
 import sys
-from pathlib import Path
 
 from . import __version__
 
@@ -139,8 +138,6 @@ def main(argv: list[str] | None = None) -> int:
         else:
             {"mark": _print_mark, "check": _print_check, "list": _print_list}[args.command](result)
         return code
-    except FileNotFoundError as exc:
-        message = f"{Path(exc.filename).name}: no such file"
     except Exception as exc:
         message = str(exc)
     if as_json:

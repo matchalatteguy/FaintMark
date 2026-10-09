@@ -71,7 +71,7 @@ def test_mark_then_check_roundtrip(home, make_image, monkeypatch):
     assert checked.structuredContent["same_image"] is True
     assert "path" not in checked.structuredContent
     assert [copy["id"] for copy in listed.structuredContent["copies"]] == [copies[1]["id"]]
-    assert missing.isError
+    assert missing.isError and missing.content[0].text.endswith("photo.jpg.gone: no such file")
     assert deep.structuredContent == {
         "status": "not_detected",
         "suspects": [],

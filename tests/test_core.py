@@ -1,6 +1,7 @@
 import functools
 import re
 import sqlite3
+from contextlib import closing
 from io import BytesIO
 from pathlib import Path
 
@@ -263,14 +264,15 @@ def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path)
 @pytest.mark.parametrize("version", [0, 2, 7])
 def test_unsupported_registries_are_refused_untouched(home, version):
     home.mkdir()
-    with sqlite3.connect(home / "registry.sqlite3") as db:
+    registry = home / "registry.sqlite3"
+    with closing(sqlite3.connect(registry)) as db, db:
         db.execute("CREATE TABLE Copies (id TEXT)")  # version 0 with a table was not made by us
+        db.execute("INSERT INTO Copies VALUES ('theirs')")
         db.execute(f"PRAGMA user_version = {version}")
+    before = registry.read_bytes()
     with pytest.raises(ValueError, match=f"^registry version {version} is not supported"):
         FaintMark()
-    with sqlite3.connect(home / "registry.sqlite3") as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == version
-        assert db.execute("PRAGMA table_info(copies)").fetchall()[0][1] == "id"
+    assert registry.read_bytes() == before
 
 
 def test_a_new_registry_gets_its_table_and_version_together(home, monkeypatch):

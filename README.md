@@ -107,7 +107,8 @@ plain statuses (a match with `same_image: false` means the picture differs
 from the issued copy); with `deep`, a result recovered by a transform, or a
 miss with candidates (`suspects` is empty when no registered id is within the
 cutoff). The CLI prints errors as the last line; MCP tools raise them as tool
-errors (`isError`) carrying the same message.
+errors (`isError`): messages from the service match, argument validation
+messages differ.
 
 ```
 {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}

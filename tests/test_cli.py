@@ -39,7 +39,10 @@ def test_mark_check_and_list_human_output(home, make_image, capsys, tmp_path):
     assert (code, summary) == (0, f"2 copies in {out_dir.resolve()}")
     alice = re.fullmatch(r"alice  ([0-9a-f]{10})  (.+)", first)
     assert alice and second.startswith("bob  ")
-    assert err == "  warning: may not survive resizing to 64px\n" * 2
+    assert err == "".join(
+        f"  warning for {copy_id}: may not survive resizing to 64px\n"
+        for copy_id in (alice[1], second.split()[1])
+    )
 
     code, out, _ = run(capsys, "check", alice[2])
     pattern = rf"matched: alice  {alice[1]}  marked \d{{4}}-\d\d-\d\dT[\d:]{{8}}Z\n"
@@ -50,7 +53,7 @@ def test_mark_check_and_list_human_output(home, make_image, capsys, tmp_path):
 
     code, out, err = run(capsys, "list", "-n", 1)
     assert (code, len(out.splitlines())) == (0, 1)
-    assert err == "  warning: may not survive resizing to 64px\n"
+    assert err == f"  warning for {second.split()[1]}: may not survive resizing to 64px\n"
     assert out.startswith(f"{second.split()[1]}  bob  2")
     files = run(capsys, "list", "-n", 1, "--files")[1]
     assert files.startswith(f"{second.split()[1]}  bob  photo.png  ")

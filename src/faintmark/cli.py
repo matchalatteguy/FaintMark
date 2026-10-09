@@ -73,7 +73,7 @@ def _print_mark(result):
     for copy in result["copies"]:
         print(f"{copy['recipient']}  {copy['id']}  {copy['path']}")
         for warning in copy["warnings"]:
-            print(f"  warning: {warning}", file=sys.stderr)
+            print(f"  warning for {copy['id']}: {warning}", file=sys.stderr)
     count = len(result["copies"])
     print(f"{count} {'copy' if count == 1 else 'copies'} in {result['output_dir']}")
 
@@ -123,7 +123,7 @@ def _print_list(result):
         path = f"  {copy['path']}" if "path" in copy else ""
         print(f"{copy['id']}  {copy['recipient']}{original}  {copy['marked_at']}{path}")
         for warning in copy["warnings"]:
-            print(f"  warning: {warning}", file=sys.stderr)
+            print(f"  warning for {copy['id']}: {warning}", file=sys.stderr)
     if not result["copies"]:
         print("no copies")
 

@@ -140,8 +140,10 @@ def _read(path):
         jpeg = JPEG_Q92
         if fmt == "JPEG" and image.quantization:
             # qtables and quality are exclusive: quality would rescale the tables. Pillow assigns
-            # the list by component (luma, then chroma), so follow each component's own selector
-            tables = [image.quantization[component[3]] for component in image.layer[:2]]
+            # the list by component, so follow each component's own selector
+            tables = [image.quantization[component[3]] for component in image.layer]
+            if len(tables) > 1 and tables[-1] == tables[-2]:
+                tables.pop()  # the usual shared chroma table
             jpeg = {"qtables": tables, "optimize": True}
             sampling = JpegImagePlugin.get_sampling(image)
             if sampling in (0, 1, 2):
@@ -254,9 +256,7 @@ class FaintMark:
 
         def checkpoint():
             if cancelled and cancelled():
-                raise RuntimeError(
-                    f"{source.name}: cancelled; the copies written so far were removed"
-                )
+                raise RuntimeError(f"{source.name}: cancelled")
 
         checkpoint()
         cover, fmt, jpeg, icc = _read(source)
@@ -311,10 +311,15 @@ class FaintMark:
                 checkpoint()
                 with db:
                     db.executemany(INSERT, rows)
-            except BaseException:
+            except BaseException as error:
+                kept = []
                 for path in created:
-                    with suppress(OSError):
-                        path.unlink()
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError:
+                        kept.append(str(path))
+                if kept:
+                    raise RuntimeError(f"{error}; could not remove {', '.join(kept)}") from error
                 raise
         return {"original": source.name, "output_dir": str(out), "copies": copies}
 

@@ -39,7 +39,8 @@ faintmark list -n 2 --json                       # MCP: list_copies {"limit": 2}
   or `FAINTMARK_HOME`); `not_detected` means no readable mark, for example after heavy downscaling or
   cropping, or a chat screenshot that still includes the app frame: crop it to the photo and check again.
 - A warning starting with "may not survive" means the copy is fragile; suggest sending it as a file
-  rather than a photo. Other warnings are informational (for example a JPEG saved at quality 95).
+  rather than a photo. One starting with "JPEG recompression not tested" means that check was skipped,
+  not passed. Other warnings are informational (a JPEG saved at quality 95, a replaced mark).
 - Say "the id in this image is registered to X", never "X leaked it": copies can be forwarded and
   ids can be copied into other images. The mark can be removed by someone who knows it is there,
   so `not_detected` says nothing about where an image came from.

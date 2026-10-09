@@ -46,7 +46,8 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "megapixels, with no animation, transparency, CMYK or 16-bit grayscale, and 1 to 100 "
             "labels of 1 to 200 printable characters. Returns the output folder and "
             "each copy's path, id and warnings. A warning starting with 'may not survive' means "
-            "the copy is fragile, so suggest sending it as a file rather than a photo. Cancelling "
+            "the copy is fragile, so suggest sending it as a file rather than a photo; one "
+            "starting with 'JPEG recompression not tested' means that check was skipped. Cancelling "
             "the call stops it at the next copy and removes the copies written so far; a batch "
             "already being registered completes."
         ),

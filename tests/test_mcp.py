@@ -1,10 +1,16 @@
+import threading
 from types import SimpleNamespace
 
 import anyio
+import pytest
+from anyio import to_thread
+from mcp.shared.exceptions import McpError
 from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.types import CancelledNotification, CancelledNotificationParams, ClientNotification
 
 from faintmark import __version__
-from faintmark.mcp_server import _HEAVY, create_server
+from faintmark.core import FaintMark
+from faintmark.mcp_server import _serialized, create_server
 
 
 def converse(calls):
@@ -37,7 +43,6 @@ def test_tools_are_declared_with_annotations_and_output_schemas():
     )
     assert "copies" in tools["mark_image"].outputSchema["properties"]
     assert tools["check_image"].outputSchema["required"] == ["status"]
-    assert _HEAVY.total_tokens == 1  # one inference job at a time
     assert "copies" in tools["list_copies"].outputSchema["properties"]
 
 
@@ -80,8 +85,6 @@ def test_mark_then_check_roundtrip(home, make_image, monkeypatch):
 
 
 def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypatch, tmp_path):
-    from faintmark.core import FaintMark
-
     copy = FaintMark().mark(make_image("photo.jpg"), ["alice"])["copies"][0]
     monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "other"))
 
@@ -97,3 +100,96 @@ def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypat
         "faintmark.core.Engine", lambda models_dir: SimpleNamespace(decode=lambda image: None)
     )
     assert converse(calls).structuredContent == {"status": "not_detected"}
+
+
+@pytest.mark.parametrize(
+    "tool, recipients, paused",
+    [
+        ("mark_image", ["alice"], "encode"),  # cancelled before the registry commit
+        ("mark_image", ["alice", "bob"], "encode"),  # cancelled before the second copy
+        ("check_image", None, "decode"),
+        ("list_copies", None, None),
+    ],
+)
+def test_a_cancelled_call_leaves_no_trace_and_the_server_survives(
+    home, make_image, monkeypatch, tool, recipients, paused
+):
+    service = FaintMark()
+    source, other = make_image("photo.png"), make_image("other.png")
+    started, release, finished, waiting = (threading.Event() for _ in range(4))
+    order = []
+    method = {"mark_image": "mark", "check_image": "check", "list_copies": "list_copies"}[tool]
+    original, check = getattr(service, method), service.check
+
+    def pause():
+        started.set()
+        release.wait(5)
+
+    def finishing(*args):
+        if paused is None:
+            pause()
+        try:
+            return original(*args)
+        finally:
+            order.append(method)
+            finished.set()
+
+    def checking(*args):
+        order.append("check")
+        return check(*args)
+
+    def observed(func, *args):  # the competing check has reached the lock
+        if func is checking:
+            waiting.set()
+        return _serialized(func, *args)
+
+    monkeypatch.setattr(service, method, finishing)
+    monkeypatch.setattr("faintmark.mcp_server._serialized", observed)
+    if paused:
+        inner = getattr(service.engine, paused)
+        monkeypatch.setattr(service.engine, paused, lambda *args: (pause(), inner(*args))[1])
+    if tool == "mark_image":
+        monkeypatch.setattr(service, "check", checking)
+    arguments = {"image_path": str(source)} if tool != "list_copies" else {}
+    if recipients:
+        arguments["recipients"] = recipients
+
+    async def session():
+        async with create_connected_server_and_client_session(create_server(service)) as client:
+            with anyio.fail_after(20):
+                request_id = client._request_id  # the id the next request will carry
+                outcome, answered = [], anyio.Event()
+
+                async def call():
+                    try:
+                        await client.call_tool(tool, arguments)
+                    except McpError as error:
+                        outcome.append(error.error.message)
+                    answered.set()
+
+                async with anyio.create_task_group() as tasks:
+                    tasks.start_soon(call)
+                    await to_thread.run_sync(started.wait, 5)
+                    cancel = CancelledNotification(
+                        method="notifications/cancelled",
+                        params=CancelledNotificationParams(requestId=request_id),
+                    )
+                    await client.send_notification(ClientNotification(cancel))
+                    await answered.wait()
+                    if tool == "mark_image":  # another inference must wait for the abandoned one
+                        tasks.start_soon(
+                            client.call_tool, "check_image", {"image_path": str(other)}
+                        )
+                        await to_thread.run_sync(waiting.wait, 5)
+                        await anyio.sleep(0.2)
+                        assert order == []
+                    release.set()
+                await to_thread.run_sync(finished.wait, 5)
+                return outcome, await client.call_tool("list_copies", {})
+
+    outcome, listed = anyio.run(session)
+    assert outcome == ["Request cancelled"]
+    assert listed.structuredContent == {"copies": []}
+    assert not (source.parent / "marked").exists() or not list((source.parent / "marked").iterdir())
+    if tool == "mark_image":
+        assert order == ["mark", "check"]

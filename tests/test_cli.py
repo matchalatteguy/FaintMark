@@ -86,7 +86,7 @@ def test_check_prints_deep_results(home, make_image, capsys, tmp_path, monkeypat
     monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "other"))
     assert run(capsys, "check", tmp_path / "flipped.png", "--deep") == (
         1,
-        f"unregistered: {copy_id} is not in this registry\n  recovered after undoing: flipped\n",
+        f"unregistered: {copy_id} is not in this registry\n  recovered by: flipped\n",
         "",
     )
 

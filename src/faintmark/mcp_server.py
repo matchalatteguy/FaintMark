@@ -1,7 +1,8 @@
 import json
+import threading
 from typing import Annotated, Literal
 
-from anyio import CapacityLimiter, to_thread
+from anyio import to_thread
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
@@ -18,7 +19,12 @@ INSTRUCTIONS = (
     "nothing about where an image came from. The first mark or check downloads 65 MB of models "
     "from Adobe."
 )
-_HEAVY = CapacityLimiter(1)  # one inference job at a time; a 25 MP copy peaks above 1 GB
+_HEAVY = threading.Lock()  # one inference job at a time; a 25 MP copy peaks above 1 GB
+
+
+def _serialized(func, *args):
+    with _HEAVY:
+        return func(*args)
 
 
 def create_server(service: FaintMark | None = None) -> FastMCP:
@@ -39,7 +45,9 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "(HEIC only when the server runs with the heic extra) up to 25 megapixels, without "
             "transparency or CMYK, and 1 to 100 recipient labels. Returns the output folder and "
             "each copy's path, id and warnings. A warning starting with 'may not survive' means "
-            "the copy is fragile, so suggest sending it as a file rather than a photo."
+            "the copy is fragile, so suggest sending it as a file rather than a photo. Cancelling "
+            "the call stops it at the next copy and removes the copies written so far; a batch "
+            "already being registered completes."
         ),
         annotations=ToolAnnotations(
             readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False
@@ -58,9 +66,20 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             Literal["png", "jpeg", "webp"] | None, Field(description="default: the source format")
         ] = None,
     ) -> MarkResult:
-        return await to_thread.run_sync(
-            get_service().mark, image_path, recipients, output_dir, format, limiter=_HEAVY
-        )
+        stop = threading.Event()  # a cancelled call stops the abandoned thread at its next copy
+        try:
+            return await to_thread.run_sync(
+                _serialized,
+                get_service().mark,
+                image_path,
+                recipients,
+                output_dir,
+                format,
+                stop.is_set,
+                abandon_on_cancel=True,
+            )
+        finally:
+            stop.set()
 
     @server.tool(
         description=(
@@ -73,7 +92,8 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "they differ beyond the "
             "threshold, which cropping or an id copied into another picture can cause. same_image "
             "true is not authentication: a tuned forgery passed it in our measurements. deep=true "
-            "also tries a flip and small rotations, and when nothing is detected lists the "
+            "also tries a flip and small rotations (transform names the one that recovered the "
+            "result), and when nothing is detected lists the "
             "registered ids within 26 of 96 codeword bits of the raw decoder output as suspects "
             "(up to three, each with id, recipient and bit_errors, plus same_image when a stored "
             "hash exists; empty when none is that close) and registry_size. Suspects are "
@@ -92,7 +112,7 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
         ] = False,
     ) -> CheckResult:
         result = await to_thread.run_sync(
-            get_service().check, image_path, files, deep, limiter=_HEAVY
+            _serialized, get_service().check, image_path, files, deep, abandon_on_cancel=True
         )
         # FastMCP would fill the absent optional keys with nulls that its own outputSchema rejects
         text = TextContent(type="text", text=json.dumps(result, indent=2))
@@ -106,7 +126,9 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
         limit: Annotated[int, Field(description="newest N copies", ge=0)] = 100,
         files: Annotated[bool, Field(description="include file names and paths")] = False,
     ) -> ListResult:
-        return await to_thread.run_sync(get_service().list_copies, limit, files)
+        return await to_thread.run_sync(
+            get_service().list_copies, limit, files, abandon_on_cancel=True
+        )
 
     return server
 

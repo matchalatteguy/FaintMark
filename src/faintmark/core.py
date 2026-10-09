@@ -256,9 +256,7 @@ class FaintMark:
 
         def checkpoint():
             if cancelled and cancelled():
-                raise RuntimeError(
-                    f"{source.name}: cancelled; the copies written so far were removed"
-                )
+                raise RuntimeError(f"{source.name}: cancelled")
 
         checkpoint()
         cover, fmt, jpeg, icc = _read(source)
@@ -317,7 +315,7 @@ class FaintMark:
                 kept = []
                 for path in created:
                     try:
-                        path.unlink()
+                        path.unlink(missing_ok=True)
                     except OSError:
                         kept.append(str(path))
                 if kept:

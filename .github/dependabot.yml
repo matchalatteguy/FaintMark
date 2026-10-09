@@ -4,6 +4,7 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
+    versioning-strategy: lockfile-only
     ignore:
       - dependency-name: onnxruntime   # capped by hand: no macOS x86_64 wheels after 1.23
       - dependency-name: mcp

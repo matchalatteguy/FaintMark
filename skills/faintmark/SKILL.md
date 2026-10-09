@@ -10,27 +10,38 @@ Local CLI (`faintmark`, run with `uvx faintmark ...` if not installed). Every re
 copy with a unique invisible id, designed to survive chat-app recompression and moderate
 resizing. Nothing is uploaded. The first mark or check downloads 65 MB of models.
 
+When the FaintMark MCP server is configured, prefer its tools `mark_image`, `check_image` and
+`list_copies`; they take the same arguments and share the registry with the CLI.
+
 ```sh
 faintmark mark /abs/photo.jpg alice bob --json     # copies in /abs/marked/, one per recipient
+# {"original": "photo.jpg", "output_dir": "/Users/me/Pictures/marked", "copies": [{"id": "991e318a21", "recipient": "alice", "path": "/Users/me/Pictures/marked/photo-991e318a21.jpg", "warnings": []}]}
 faintmark check /abs/received.jpg --json           # status: matched | unregistered | not_detected
+# {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
+# {"status": "unregistered", "id": "3123f6f877"}  or  {"status": "not_detected"}
 faintmark list --json
+# {"copies": [{"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
 ```
 
 - Writes files only, sends nothing. Send each person only their own file (`copies[].path`); file
   names carry the id, not the recipient. The source format is kept: JPEG stays JPEG.
 - `check` exits 0 for `matched` (returns `recipient`, `id`, `marked_at`, `same_image`), 1 otherwise, 2 on
-  error. `same_image` compares perceptual hashes with the issued copy; `false` means they differ beyond
-  the threshold, which cropping or an id copied into another picture can cause. `--files` adds file
-  names and paths; omit it unless needed. HEIC input is written as JPEG.
+  error. `same_image`, present when the registry stored a hash for the copy, compares perceptual hashes
+  with the issued copy: `false` means they differ beyond the threshold, which cropping or an id copied
+  into another picture can cause. `true` is not authentication; a tuned forgery passed it in our
+  measurements. `--files` adds file names and paths; omit it unless needed. HEIC input is written as JPEG.
 - If a leaked copy returns `not_detected` and tampering is plausible, run `faintmark check IMAGE --deep --json`:
-  it undoes flips and small rotations, and otherwise lists `suspects`, the registered ids closest to the
-  raw decoder bits (`bit_errors`, `same_image`, `registry_size`). Suspects are uncalibrated candidates:
-  they can be coincidental or forged. Say "the closest registered id is X, N bits away", never "X".
-- `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`);
-  `not_detected` means no readable mark, for example after heavy downscaling or cropping.
+  it undoes flips and small rotations, and otherwise lists `suspects` (`id`, `recipient`, `bit_errors`,
+  `same_image`), the registered ids within 26 of 96 codeword bits of the raw decoder output, empty when
+  none is that close, and `registry_size`. Suspects are uncalibrated candidates: they can be coincidental
+  or forged. Say "the closest registered id is X, N bits away", never "X".
+- `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`,
+  or `FAINTMARK_HOME`); `not_detected` means no readable mark, for example after heavy downscaling or
+  cropping, or a chat screenshot that still includes the app frame: crop it to the photo and check again.
 - A warning starting with "may not survive" means the copy is fragile; suggest sending it as a file
   rather than a photo. Other warnings are informational (for example a JPEG saved at quality 95).
 - Say "the id in this image is registered to X", never "X leaked it": copies can be forwarded and
   ids can be copied into other images. The mark can be removed by someone who knows it is there,
   so `not_detected` says nothing about where an image came from.
-- HEIC input needs the `heic` extra (`uvx --from 'faintmark[heic]' faintmark ...`). No transparency, up to 25 MP.
+- HEIC input needs the `heic` extra (`uvx --from 'faintmark[heic]' faintmark ...`). `mark` takes no
+  transparency and up to 25 MP; `check` reads anything Pillow opens up to 100 MP.

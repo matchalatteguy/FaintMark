@@ -92,10 +92,13 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with: { version: "0.12.5" }
       - run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/
-      - name: Create the GitHub release, then upload any missing assets
+      - name: Create the GitHub release, then upload the assets it lacks
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          have="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for file in dist/*; do
+            grep -qxF "$(basename "$file")" <<<"$have" || gh release upload "$GITHUB_REF_NAME" "$file"
+          done
       # Rerun-safe: skip when the registry already has this exact version; publish on 404; any other answer fails the job.
       - name: Publish to the MCP registry
         run: |

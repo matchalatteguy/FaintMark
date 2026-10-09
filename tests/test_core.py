@@ -106,6 +106,26 @@ def test_jpeg_tables_follow_the_components_selectors(app, make_image):
         assert saved.quantization == {0: luma, 1: chroma}
 
 
+def test_jpeg_with_three_tables_keeps_all_of_them(app, make_image):
+    tables = [[3] * 64, [7] * 64, [13] * 64]
+    copy = app.mark(make_image("photo.jpg", qtables=tables), ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as saved:
+        assert [component[3] for component in saved.layer] == [0, 1, 2]
+        assert saved.quantization == dict(enumerate(tables))
+
+
+def test_cleanup_names_the_files_it_could_not_remove(app, make_image, monkeypatch):
+    source = make_image("photo.png")
+    monkeypatch.setattr("faintmark.core.INSERT", "INSERT INTO nowhere VALUES (:id)")
+
+    def refuse(self, missing_ok=False):
+        raise PermissionError(13, "busy")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    with pytest.raises(RuntimeError, match=r"^no such table: nowhere; could not remove .*photo-"):
+        app.mark(source, ["alice"])
+
+
 def test_a_png_too_wide_for_jpeg_is_still_delivered(app, tmp_path):
     source = tmp_path / "panorama.png"
     Image.new("RGB", (70_000, 256), (90, 120, 150)).save(source)

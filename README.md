@@ -47,14 +47,14 @@ faintmark list [-n N] [--files] [--json]
 Copies go into `marked/` beside the image unless `-o` says otherwise. Quote
 labels with spaces: `faintmark mark photo.jpg 'Alice Smith'`. One run marks 1
 to 100 recipients. `--json` prints the result the matching MCP tool returns;
-`mark` includes the source file name and output paths, `check` and `list`
-omit file names and paths unless `--files` is set. `check --deep` also tries
-a flip and small rotations, and when nothing is detected lists the registered
-ids closest to the raw decoder bits as candidates with their bit distance.
-Those are uncalibrated and can be coincidental or forged; they are never a
-match. With `--json`, errors
-print `{"error": "..."}`. `check` exits 0 for `matched`, 1 for `unregistered`
-or `not_detected`, 2 for an error.
+`mark` includes the source file name and output paths, `check` and `list` omit
+file names and paths unless `--files` is set. `check --deep` also tries a flip
+and small rotations, and when nothing is detected lists up to three
+registered ids within 26 of 96 codeword bits of the raw decoder output as
+candidates, with their bit distance. Those are uncalibrated and can be
+coincidental or forged; they are never a match. With `--json`, errors print
+`{"error": "..."}`. `check` exits 0 for `matched`, 1 for `unregistered` or
+`not_detected`, 2 for an error.
 
 `mark` accepts non-animated JPEG, PNG, WebP and HEIC up to 25 megapixels
 without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
@@ -78,7 +78,9 @@ use another registry.
 { "mcpServers": { "faintmark": { "type": "stdio", "command": "uvx", "args": ["faintmark", "mcp"] } } }
 ```
 
-Choose one route per client; plugins and extensions bundle the skill too.
+Choose one route per client; plugins and extensions bundle the skill too. For
+HEIC input start the server as `uvx --from 'faintmark[heic]' faintmark mcp`;
+the bundled launchers use the base package.
 
 - [Add to Cursor](https://cursor.com/en/install-mcp?name=faintmark&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJmYWludG1hcmsiLCJtY3AiXX0=)
 - [Add to VS Code](https://vscode.dev/redirect/mcp/install?name=faintmark&config=%7B%22name%22%3A%22faintmark%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22faintmark%22%2C%22mcp%22%5D%7D)
@@ -100,6 +102,27 @@ perceptual hashes with the issued copy: `false` means they differ beyond the
 threshold, which cropping or an id copied into another picture can cause; the
 comparison can also miss differences.
 
+`check_image` and `faintmark check --json` return one of these: the three
+plain statuses; with `deep`, a result recovered by undoing a transform, or a
+miss with candidates (`suspects` is empty when no registered id is within the
+cutoff). The CLI prints errors as the last line; MCP tools raise them as tool
+errors (`isError`) carrying the same message.
+
+```
+{"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
+{"status": "unregistered", "id": "3123f6f877"}
+{"status": "not_detected"}
+{"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true, "transform": "rotated 4"}
+{"status": "not_detected", "suspects": [{"id": "991e318a21", "recipient": "alice", "bit_errors": 21, "same_image": true}], "registry_size": 100}
+{"error": "forwarded.jpg: no such file"}
+```
+
+`mark_image` and `faintmark mark --json` return:
+
+```
+{"original": "photo.jpg", "output_dir": "/Users/me/Pictures/marked", "copies": [{"id": "991e318a21", "recipient": "alice", "path": "/Users/me/Pictures/marked/photo-991e318a21.jpg", "warnings": []}]}
+```
+
 ## Tested on real apps
 
 7 October 2026, FaintMark 0.1.0, three source photos (an iPhone scene, a CC0
@@ -116,7 +139,7 @@ round-trip observations, not recovery rates or guarantees for an app.
 | Telegram photo, scene | 960x1280, 102 KB | matched 1/1 |
 | WeChat photo, portrait and sunset | long edge 1644 to 1920 px, 67 to 302 KB | matched 2/2 |
 | Instagram DM, portrait | 1206x804, 176 KB | matched 1/1 |
-| Chat screenshots on WhatsApp, Discord, Telegram, WeChat, Instagram | photo area 240 to 1020 px | matched 8/8 |
+| Chat screenshots on WhatsApp, Discord, Telegram, WeChat, Instagram | photo long edge 286 to 1022 px | matched 9/9 |
 | Tinder profile card, portrait (screenshot) | heavy crop | not detected 0/1 |
 
 Every match also reported `same_image: true`. The originals, every received
@@ -154,8 +177,8 @@ holds BCH vectors and two images marked by upstream TrustMark 0.9.2; FaintMark
 decodes their ids and reproduces their marked pixels within one value per RGB
 channel. A chat-app style ladder in the real-model tests (resize to 1600, 1280
 and 1024 px with JPEG 70 to 80, WebP 75, and a chained resize-plus-JPEG pass,
-on delivered JPEG bytes) recovers the id on all three test covers except WebP
-75 on a 320 px cover.
+on delivered JPEG bytes) recovers the id on two 12-megapixel synthetic covers
+and the 320 px fixture, except WebP 75 on the fixture.
 
 ## Attacks we measured
 

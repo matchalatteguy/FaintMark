@@ -10,7 +10,7 @@ from mcp.types import CancelledNotification, CancelledNotificationParams, Client
 
 from faintmark import __version__
 from faintmark.core import FaintMark
-from faintmark.mcp_server import create_server
+from faintmark.mcp_server import _serialized, create_server
 
 
 def converse(calls):
@@ -116,7 +116,7 @@ def test_a_cancelled_call_leaves_no_trace_and_the_server_survives(
 ):
     service = FaintMark()
     source, other = make_image("photo.png"), make_image("other.png")
-    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+    started, release, finished, waiting = (threading.Event() for _ in range(4))
     order = []
     method = {"mark_image": "mark", "check_image": "check", "list_copies": "list_copies"}[tool]
     original, check = getattr(service, method), service.check
@@ -138,7 +138,13 @@ def test_a_cancelled_call_leaves_no_trace_and_the_server_survives(
         order.append("check")
         return check(*args)
 
+    def observed(func, *args):  # the competing check has reached the lock
+        if func is checking:
+            waiting.set()
+        return _serialized(func, *args)
+
     monkeypatch.setattr(service, method, finishing)
+    monkeypatch.setattr("faintmark.mcp_server._serialized", observed)
     if paused:
         inner = getattr(service.engine, paused)
         monkeypatch.setattr(service.engine, paused, lambda *args: (pause(), inner(*args))[1])
@@ -174,6 +180,9 @@ def test_a_cancelled_call_leaves_no_trace_and_the_server_survives(
                         tasks.start_soon(
                             client.call_tool, "check_image", {"image_path": str(other)}
                         )
+                        await to_thread.run_sync(waiting.wait, 5)
+                        await anyio.sleep(0.2)
+                        assert order == []
                     release.set()
                 await to_thread.run_sync(finished.wait, 5)
                 return outcome, await client.call_tool("list_copies", {})

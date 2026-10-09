@@ -139,9 +139,9 @@ def _read(path):
         icc = icc if icc and icc[16:20] == b"RGB " else None  # outputs are always RGB
         jpeg = JPEG_Q92
         if fmt == "JPEG" and image.quantization:
-            # qtables and quality are exclusive: quality would rescale the tables; a list keeps
-            # tables that sit in unusual slots, which Pillow rejects as a dict
-            tables = [image.quantization[slot] for slot in sorted(image.quantization)]
+            # qtables and quality are exclusive: quality would rescale the tables. Pillow assigns
+            # the list by component (luma, then chroma), so follow each component's own selector
+            tables = [image.quantization[component[3]] for component in image.layer[:2]]
             jpeg = {"qtables": tables, "optimize": True}
             sampling = JpegImagePlugin.get_sampling(image)
             if sampling in (0, 1, 2):
@@ -200,8 +200,11 @@ def _preflight(engine, saved, value):
     edge = 1280 if long > 1280 else max(1, long // 2)
     size = tuple(max(1, round(side * edge / long)) for side in saved.size)
     warnings = []
-    if engine.decode(_jpeg70(saved)) != value:
-        warnings.append("may not survive JPEG recompression")
+    try:
+        if engine.decode(_jpeg70(saved)) != value:
+            warnings.append("may not survive JPEG recompression")
+    except OSError:  # libjpeg stops at 65500 pixels per side
+        warnings.append("JPEG recompression not tested at full size: a side exceeds 65500px")
     if engine.decode(_jpeg70(saved.resize(size, Image.LANCZOS))) != value:
         warnings.append(f"may not survive resizing to {edge}px")
     return warnings
@@ -316,8 +319,16 @@ class FaintMark:
                 raise
         return {"original": source.name, "output_dir": str(out), "copies": copies}
 
-    def check(self, image: str | Path, files: bool = False, deep: bool = False) -> CheckResult:
+    def check(
+        self,
+        image: str | Path,
+        files: bool = False,
+        deep: bool = False,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> CheckResult:
         path = Path(image).expanduser()
+        if cancelled and cancelled():
+            raise RuntimeError(f"{path.name}: cancelled")
         with _open(path) as opened:
             if opened.width * opened.height > MAX_CHECK_PIXELS:
                 raise ValueError(f"{path.name}: larger than 100 megapixels")
@@ -325,6 +336,8 @@ class FaintMark:
         result = self._lookup(rgb, self.engine.decode(rgb), files)
         if deep and result["status"] == "not_detected":
             for name, transform in DEEP_TRANSFORMS:
+                if cancelled and cancelled():
+                    raise RuntimeError(f"{path.name}: cancelled")
                 variant = transform(rgb)
                 found = self._lookup(variant, self.engine.decode(variant), files)
                 if found["status"] != "not_detected":

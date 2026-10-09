@@ -14,13 +14,12 @@ When the FaintMark MCP server is configured, prefer its tools `mark_image`, `che
 `list_copies`; they cover the same operations and share the registry with the CLI.
 
 ```sh
-faintmark mark /abs/photo.jpg alice bob --json     # copies in /abs/marked/, one per recipient
+faintmark mark /abs/photo.jpg alice bob --json   # MCP: mark_image {"image_path": "/abs/photo.jpg", "recipients": ["alice", "bob"]}
 # {"original": "photo.jpg", "output_dir": "/abs/marked", "copies": [{"id": "991e318a21", "recipient": "alice", "path": "/abs/marked/photo-991e318a21.jpg", "warnings": []}, {"id": "746ac9fa88", "recipient": "bob", "path": "/abs/marked/photo-746ac9fa88.jpg", "warnings": []}]}
-faintmark check /abs/received.jpg --json           # status: matched | unregistered | not_detected
+faintmark check /abs/received.jpg --json         # MCP: check_image {"image_path": "/abs/received.jpg"}
 # {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
 # {"status": "unregistered", "id": "3123f6f877"}  or  {"status": "not_detected"}
-faintmark list --json
-# MCP: mark_image {"image_path": "/abs/photo.jpg", "recipients": ["alice", "bob"]}   check_image {"image_path": "/abs/received.jpg", "deep": true}
+faintmark list --json                            # MCP: list_copies {"limit": 2}
 # {"copies": [{"id": "746ac9fa88", "recipient": "bob", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}, {"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
 ```
 
@@ -44,5 +43,6 @@ faintmark list --json
 - Say "the id in this image is registered to X", never "X leaked it": copies can be forwarded and
   ids can be copied into other images. The mark can be removed by someone who knows it is there,
   so `not_detected` says nothing about where an image came from.
-- HEIC input needs the `heic` extra (`uvx --from 'faintmark[heic]' faintmark ...`). `mark` takes no
-  transparency and up to 25 MP; `check` reads anything Pillow opens up to 100 MP.
+- HEIC input needs the `heic` extra (`uvx --from 'faintmark[heic]' faintmark ...`). `mark` takes JPEG, PNG,
+  WebP or HEIC up to 25 MP with no animation, transparency, CMYK or 16-bit grayscale, and labels of 1 to 200
+  printable characters; `check` reads anything Pillow opens up to 100 MP.

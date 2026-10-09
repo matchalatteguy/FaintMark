@@ -119,10 +119,12 @@ errors (`isError`) carrying the same message.
 {"error": "forwarded.jpg: no such file"}
 ```
 
-`mark_image` and `faintmark mark --json` return:
+`mark_image` and `faintmark mark --json` return the first line; `list_copies`
+and `faintmark list --json` return the second, newest first:
 
 ```
 {"original": "photo.jpg", "output_dir": "/Users/me/Pictures/marked", "copies": [{"id": "991e318a21", "recipient": "alice", "path": "/Users/me/Pictures/marked/photo-991e318a21.jpg", "warnings": []}]}
+{"copies": [{"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
 ```
 
 ## Tested on real apps

@@ -84,6 +84,39 @@ def test_grayscale_jpeg_keeps_its_single_table(app, tmp_path, slot):
     assert app.check(copy["path"])["recipient"] == "alice"
 
 
+def test_jpeg_tables_follow_the_components_selectors(app, make_image):
+    source = make_image("photo.jpg", quality=75)
+    data = bytearray(source.read_bytes())  # swap the two table ids and every component's selector
+    start = 0
+    while (start := data.find(b"\xff\xdb", start)) >= 0:
+        pos, end = start + 4, start + 2 + int.from_bytes(data[start + 2 : start + 4], "big")
+        while pos < end:
+            data[pos] ^= 1
+            pos += 1 + 64 * (1 + (data[pos] >> 4))
+        start = end
+    sof = data.index(b"\xff\xc0")
+    for component in range(data[sof + 9]):
+        data[sof + 12 + 3 * component] ^= 1
+    source.write_bytes(data)
+    with Image.open(source) as original:
+        assert [component[3] for component in original.layer] == [1, 0, 0]
+        luma, chroma = original.quantization[1], original.quantization[0]
+    copy = app.mark(source, ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as saved:
+        assert saved.quantization == {0: luma, 1: chroma}
+
+
+def test_a_png_too_wide_for_jpeg_is_still_delivered(app, tmp_path):
+    source = tmp_path / "panorama.png"
+    Image.new("RGB", (70_000, 256), (90, 120, 150)).save(source)
+    copy = app.mark(source, ["alice"])["copies"][0]
+    assert copy["warnings"] == [
+        "JPEG recompression not tested at full size: a side exceeds 65500px",
+        "may not survive resizing to 1280px",
+    ]
+    assert app.check(copy["path"])["recipient"] == "alice"
+
+
 def test_transparency_is_rejected_and_opaque_alpha_is_dropped(app, tmp_path):
     seethrough = Image.new("RGBA", (128, 96), (10, 20, 30, 255))
     seethrough.putpixel((5, 5), (10, 20, 30, 254))

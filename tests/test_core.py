@@ -64,15 +64,21 @@ def test_heic_becomes_jpeg(app, make_image):
     assert app.check(path)["recipient"] == "alice"
 
 
-def test_grayscale_jpeg_keeps_its_single_table(app, tmp_path):
+@pytest.mark.parametrize("slot", [0, 1, 3])
+def test_grayscale_jpeg_keeps_its_single_table(app, tmp_path, slot):
     source = tmp_path / "scan.jpg"
     Image.fromarray(np.tile(np.linspace(0, 200, 128).astype(np.uint8), (96, 1))).save(
         source, quality=80
     )
+    data = bytearray(source.read_bytes())  # move the table: its id in DQT and in the SOF component
+    data[data.index(b"\xff\xdb") + 4] = data[data.index(b"\xff\xc0") + 12] = slot
+    source.write_bytes(data)
+    with Image.open(source) as original:
+        [table] = original.quantization.values()
+        assert list(original.quantization) == [slot]
     copy = app.mark(source, ["alice"])["copies"][0]
-    with Image.open(copy["path"]) as saved, Image.open(source) as original:
-        assert (saved.mode, len(original.quantization)) == ("RGB", 1)
-        assert saved.quantization == original.quantization
+    with Image.open(copy["path"]) as saved:
+        assert (saved.mode, saved.quantization) == ("RGB", {0: table})
     assert app.check(copy["path"])["recipient"] == "alice"
 
 

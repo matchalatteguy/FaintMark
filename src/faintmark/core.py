@@ -138,8 +138,10 @@ def _read(path):
         icc = icc if icc and icc[16:20] == b"RGB " else None  # outputs are always RGB
         jpeg = JPEG_Q92
         if fmt == "JPEG" and image.quantization:
-            # qtables and quality are exclusive: quality would rescale the tables
-            jpeg = {"qtables": image.quantization, "optimize": True}
+            # qtables and quality are exclusive: quality would rescale the tables; a list keeps
+            # tables that sit in unusual slots, which Pillow rejects as a dict
+            tables = [image.quantization[slot] for slot in sorted(image.quantization)]
+            jpeg = {"qtables": tables, "optimize": True}
             sampling = JpegImagePlugin.get_sampling(image)
             if sampling in (0, 1, 2):
                 jpeg["subsampling"] = sampling

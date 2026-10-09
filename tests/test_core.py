@@ -345,7 +345,7 @@ def test_marking_a_marked_image_replaces_the_mark_and_says_so(app, make_image):
     assert app.check(second["path"])["recipient"] == "bob"
 
 
-def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
+def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path, monkeypatch):
     copy = app.mark(make_image("photo.png"), ["alice"])["copies"][0]
     with Image.open(copy["path"]) as image:
         image.transpose(Image.FLIP_LEFT_RIGHT).save(tmp_path / "flipped.png")
@@ -373,8 +373,13 @@ def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
         "suspects": [],
         "registry_size": 0,
     }
+    seen = []
+    raw_bits = app.engine.raw_bits
+    monkeypatch.setattr(app.engine, "raw_bits", lambda image: seen.append(1) or raw_bits(image))
+    flags = iter([False, False, True])  # at entry, before the flip, before the candidate scan
     with pytest.raises(RuntimeError, match="^damaged.png: cancelled$"):
-        app.check(tmp_path / "damaged.png", deep=True, cancelled=lambda: True)
+        app.check(tmp_path / "damaged.png", deep=True, cancelled=lambda: next(flags))
+    assert len(seen) == 2  # the plain and the flipped decode; no candidate scan
 
 
 def test_deep_check_keeps_an_unregistered_id_found_after_a_flip(app, make_image, tmp_path):

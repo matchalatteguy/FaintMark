@@ -169,9 +169,10 @@ and reports `same_image: false` when their distance exceeds the threshold. A
 JPEG whose source settings lose the mark is saved at quality 95 instead, and
 says so in its warnings. Marking an image that already carries a mark
 replaces it and says so. A preflight re-encodes each copy at JPEG quality 70,
-at full size and resized to 1280 px (half size when the image is smaller),
-and warns when the id does not survive; send those copies as a file rather
-than a photo.
+at full size (skipped with a warning when a side exceeds 65,500 px, JPEG's
+limit) and resized to 1280 px (half size when the image is smaller), and
+warns when the id does not survive; send those copies as a file rather than a
+photo.
 
 ICC profiles are kept so Display P3 photos stay the same colour. EXIF and other
 metadata are not copied.

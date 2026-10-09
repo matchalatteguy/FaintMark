@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from PIL import Image, ImageCms
 
-from faintmark import bch
+from faintmark import bch, core
 
 
 class Stub:
@@ -34,6 +34,9 @@ class Stub:
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("FAINTMARK_HOME", str(tmp_path / "home"))
     monkeypatch.setattr("faintmark.core.Engine", lambda models_dir: Stub())
+    # a small rotation can blur a damaged stub grid back into its id (14 of 4000 draws), which
+    # would make the deep-check tests depend on the random id; the real-model tests cover rotations
+    monkeypatch.setattr("faintmark.core.DEEP_TRANSFORMS", core.DEEP_TRANSFORMS[:1])
     return tmp_path / "home"
 
 

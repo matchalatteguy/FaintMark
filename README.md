@@ -144,7 +144,7 @@ round-trip observations, not recovery rates or guarantees for an app.
 
 Every match also reported `same_image: true`. The originals, every received
 file, the screenshots, the crops and a manifest of expected ids and results
-([docs/evidence-2026-10-07.json](docs/evidence-2026-10-07.json)) are in the
+([docs/evidence-2026-10-07.json](https://github.com/matchalatteguy/FaintMark/blob/main/docs/evidence-2026-10-07.json)) are in the
 [evidence release](https://github.com/matchalatteguy/FaintMark/releases/tag/evidence-2026-10-07).
 On a machine without this registry, the received files return `unregistered`
 with the id from the manifest; the originals and the Tinder crop return
@@ -190,8 +190,8 @@ attached to the evidence release.
   payload removes it at 42 to 47 dB PSNR (6/6). `check` then says
   `not_detected`, exactly as for an unmarked photo.
 - **Overwrite it.** Re-marking with another id wins every time (last writer
-  wins, 41 to 44 dB). The previous id leaves only a faint statistical trace
-  that cannot be read from one image.
+  wins, 41 to 44 dB). In these trials the decoder read the replacement and
+  never the previous id.
 - **Combine copies.** Averaging two or three recipients' copies defeats the
   plain decoder every time. Against a registry of 100 ids, the closest
   registered codeword belonged to a colluder in 264 of 264 trials (12 to 30
@@ -235,7 +235,8 @@ and back it up; without it, a recoverable id is reported as `unregistered`.
 `FAINTMARK_HOME` selects another directory.
 
 MIT licensed. TrustMark and its models are Adobe's, also MIT. See
-[CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) and
+[CONTRIBUTING](https://github.com/matchalatteguy/FaintMark/blob/main/CONTRIBUTING.md),
+[SECURITY](https://github.com/matchalatteguy/FaintMark/blob/main/SECURITY.md) and
 [releases](https://github.com/matchalatteguy/FaintMark/releases).
 
 <!-- mcp-name: io.github.matchalatteguy/faintmark -->

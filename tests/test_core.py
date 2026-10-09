@@ -1,5 +1,7 @@
+import functools
 import re
 import sqlite3
+from contextlib import closing
 from io import BytesIO
 from pathlib import Path
 
@@ -225,13 +227,19 @@ def test_registry_failure_removes_the_written_files(app, make_image, monkeypatch
     assert list((source.parent / "marked").iterdir()) == []
 
 
-def test_tampered_model_download_is_rejected(tmp_path, monkeypatch):
+def test_tampered_or_oversized_model_downloads_are_rejected(tmp_path, monkeypatch):
     source = tmp_path / "cdn"
     source.mkdir()
     for name in engine.MODEL_HASHES:
-        (source / name).write_bytes(b"not the model")
+        (source / name).write_bytes(b"x" * (1 << 20))  # exactly the cap: read in full, then hashed
     monkeypatch.setattr(engine, "MODEL_URL", source.as_uri() + "/")
+    monkeypatch.setattr(engine, "MAX_MODEL_BYTES", 1 << 20)
     with pytest.raises(RuntimeError, match="^model checksum mismatch: encoder_Q.onnx$"):
+        engine.ensure_models(tmp_path / "models")
+    (source / "encoder_Q.onnx").write_bytes(
+        b"x" * (1 << 20) + b"y"
+    )  # one byte over, in a 2nd chunk
+    with pytest.raises(RuntimeError, match="^model download larger than expected: encoder_Q.onnx$"):
         engine.ensure_models(tmp_path / "models")
     assert list((tmp_path / "models").iterdir()) == []
 
@@ -253,13 +261,38 @@ def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path)
     }
 
 
-@pytest.mark.parametrize("version", [2, 7])
-def test_unsupported_registry_versions_are_refused(home, version):
+@pytest.mark.parametrize("version", [0, 2, 7])
+def test_unsupported_registries_are_refused_untouched(home, version):
     home.mkdir()
-    with sqlite3.connect(home / "registry.sqlite3") as db:
+    registry = home / "registry.sqlite3"
+    with closing(sqlite3.connect(registry)) as db, db:
+        db.execute("CREATE TABLE Copies (id TEXT)")  # version 0 with a table was not made by us
+        db.execute("INSERT INTO Copies VALUES ('theirs')")
         db.execute(f"PRAGMA user_version = {version}")
+    before = registry.read_bytes()
     with pytest.raises(ValueError, match=f"^registry version {version} is not supported"):
         FaintMark()
+    assert registry.read_bytes() == before
+
+
+def test_a_new_registry_gets_its_table_and_version_together(home, monkeypatch):
+    class Interrupted(sqlite3.Connection):
+        def execute(self, sql, *args):
+            if sql.startswith("PRAGMA user_version ="):
+                raise sqlite3.OperationalError("disk I/O error")
+            return super().execute(sql, *args)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "faintmark.core.sqlite3.connect",
+            functools.partial(sqlite3.connect, factory=Interrupted),
+        )
+        with pytest.raises(sqlite3.OperationalError):
+            FaintMark()
+    with sqlite3.connect(home / "registry.sqlite3") as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 0
+        assert db.execute("SELECT name FROM sqlite_master").fetchall() == []
+    assert FaintMark().list_copies() == {"copies": []}
 
 
 def test_heic_without_the_extra_is_explained(app, tmp_path, monkeypatch):

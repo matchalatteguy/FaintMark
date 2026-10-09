@@ -214,11 +214,19 @@ class FaintMark:
         self.engine = engine or Engine(self.home / "models")
         self._registry = self.home / "registry.sqlite3"
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")  # a new registry gets its table and version together
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 3):
+            foreign = (
+                version == 0
+                and db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name = 'copies' COLLATE NOCASE"
+                ).fetchone()
+            )
+            if version not in (0, 3) or foreign:
                 raise ValueError(f"registry version {version} is not supported by this FaintMark")
             db.execute(SCHEMA)
             db.execute("PRAGMA user_version = 3")
+            db.commit()
         with suppress(OSError):
             os.chmod(self._registry, 0o600)
 

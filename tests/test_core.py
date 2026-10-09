@@ -230,12 +230,20 @@ def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path)
     }
 
 
-def test_unsupported_registry_versions_are_refused(home):
+@pytest.mark.parametrize("version", [2, 7])
+def test_unsupported_registry_versions_are_refused(home, version):
     home.mkdir()
     with sqlite3.connect(home / "registry.sqlite3") as db:
-        db.execute("PRAGMA user_version = 7")
-    with pytest.raises(ValueError, match="^registry version 7 is not supported"):
+        db.execute(f"PRAGMA user_version = {version}")
+    with pytest.raises(ValueError, match=f"^registry version {version} is not supported"):
         FaintMark()
+
+
+def test_heic_without_the_extra_is_explained(app, tmp_path, monkeypatch):
+    monkeypatch.delitem(Image.OPEN, "HEIF", raising=False)
+    (tmp_path / "photo.heic").write_bytes(b"not an image")
+    with pytest.raises(ValueError, match=r"^photo.heic: HEIC needs the heic extra \(install"):
+        app.check(tmp_path / "photo.heic")
 
 
 def test_marking_a_marked_image_replaces_the_mark_and_says_so(app, make_image):

@@ -41,9 +41,11 @@ def test_tools_are_declared_with_annotations_and_output_schemas():
     assert "copies" in tools["list_copies"].outputSchema["properties"]
 
 
-def test_mark_then_check_roundtrip(home, make_image):
+def test_mark_then_check_roundtrip(home, make_image, monkeypatch):
     source = make_image("photo.jpg", quality=85, subsampling=2)
     unmarked = make_image("small.png", size=(64, 48))  # too small for the stub to read at any angle
+    draws = iter([1, 2])  # codewords 31 and 36 bits from the all-zero read, so never candidates
+    monkeypatch.setattr("faintmark.core.secrets.randbits", lambda bits: next(draws))
 
     async def calls(client):
         empty = await client.call_tool("list_copies", {})

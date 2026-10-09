@@ -6,7 +6,6 @@ MIT, Copyright 2023 Adobe).
 
 import hashlib
 import os
-import shutil
 import sys
 import tempfile
 import threading
@@ -26,6 +25,7 @@ MODEL_HASHES = {
     "encoder_Q.onnx": "19b3d1b25836130ffd78775a8f61539f993375d1823ef0e59ba5b8dffb4f892d",
     "decoder_Q.onnx": "ee3268f057c9dabef680e169302f5973d0589feea86189ed229a896cc3aa88df",
 }
+MAX_MODEL_BYTES = 100_000_000  # the two files total 65 MB
 ENC_RES, DEC_RES, ASPECT_LIMIT, FEATHER = 256, 256, 2.0, 0.01
 
 
@@ -47,7 +47,12 @@ def ensure_models(directory: Path) -> Path:
         temp = tempfile.NamedTemporaryFile(dir=directory, delete=False)
         try:
             with temp, urllib.request.urlopen(MODEL_URL + name, timeout=60) as response:
-                shutil.copyfileobj(response, temp)
+                received = 0
+                while chunk := response.read(1 << 20):
+                    received += len(chunk)
+                    if received > MAX_MODEL_BYTES:
+                        raise RuntimeError(f"model download larger than expected: {name}")
+                    temp.write(chunk)
             if _sha256(temp.name) != digest:
                 raise RuntimeError(f"model checksum mismatch: {name}")
             os.replace(temp.name, target)

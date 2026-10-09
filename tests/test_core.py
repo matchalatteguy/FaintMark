@@ -234,6 +234,10 @@ def test_tampered_model_download_is_rejected(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="^model checksum mismatch: encoder_Q.onnx$"):
         engine.ensure_models(tmp_path / "models")
     assert list((tmp_path / "models").iterdir()) == []
+    monkeypatch.setattr(engine, "MAX_MODEL_BYTES", 8)
+    with pytest.raises(RuntimeError, match="^model download larger than expected: encoder_Q.onnx$"):
+        engine.ensure_models(tmp_path / "models")
+    assert list((tmp_path / "models").iterdir()) == []
 
 
 def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path):
@@ -253,10 +257,11 @@ def test_an_id_copied_into_another_picture_is_flagged(app, make_image, tmp_path)
     }
 
 
-@pytest.mark.parametrize("version", [2, 7])
-def test_unsupported_registry_versions_are_refused(home, version):
+@pytest.mark.parametrize("version", [0, 2, 7])
+def test_unsupported_registries_are_refused(home, version):
     home.mkdir()
     with sqlite3.connect(home / "registry.sqlite3") as db:
+        db.execute("CREATE TABLE copies (id TEXT)")  # version 0 with a table was not made by us
         db.execute(f"PRAGMA user_version = {version}")
     with pytest.raises(ValueError, match=f"^registry version {version} is not supported"):
         FaintMark()

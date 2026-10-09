@@ -2,6 +2,7 @@ import threading
 from types import SimpleNamespace
 
 import anyio
+import pytest
 from anyio import to_thread
 from mcp.shared.exceptions import McpError
 from mcp.shared.memory import create_connected_server_and_client_session
@@ -9,7 +10,7 @@ from mcp.types import CancelledNotification, CancelledNotificationParams, Client
 
 from faintmark import __version__
 from faintmark.core import FaintMark
-from faintmark.mcp_server import _HEAVY, create_server
+from faintmark.mcp_server import create_server
 
 
 def converse(calls):
@@ -42,7 +43,6 @@ def test_tools_are_declared_with_annotations_and_output_schemas():
     )
     assert "copies" in tools["mark_image"].outputSchema["properties"]
     assert tools["check_image"].outputSchema["required"] == ["status"]
-    assert _HEAVY.total_tokens == 1  # one inference job at a time
     assert "copies" in tools["list_copies"].outputSchema["properties"]
 
 
@@ -102,52 +102,85 @@ def test_unmatched_checks_return_only_their_own_keys(home, make_image, monkeypat
     assert converse(calls).structuredContent == {"status": "not_detected"}
 
 
-def test_a_cancelled_mark_removes_its_files_and_the_server_survives(home, make_image, monkeypatch):
+@pytest.mark.parametrize(
+    "tool, recipients, paused",
+    [
+        ("mark_image", ["alice"], "encode"),  # cancelled before the registry commit
+        ("mark_image", ["alice", "bob"], "encode"),  # cancelled before the second copy
+        ("check_image", None, "decode"),
+        ("list_copies", None, None),
+    ],
+)
+def test_a_cancelled_call_leaves_no_trace_and_the_server_survives(
+    home, make_image, monkeypatch, tool, recipients, paused
+):
     service = FaintMark()
-    source = make_image("photo.png")
-    started, release, done = threading.Event(), threading.Event(), threading.Event()
-    encode, mark = service.engine.encode, service.mark
+    source, other = make_image("photo.png"), make_image("other.png")
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+    order = []
+    method = {"mark_image": "mark", "check_image": "check", "list_copies": "list_copies"}[tool]
+    original, check = getattr(service, method), service.check
 
-    def slow_encode(image, value):
+    def pause():
         started.set()
         release.wait(5)
-        return encode(image, value)
 
-    def mark_then_signal(*args):
+    def finishing(*args):
+        if paused is None:
+            pause()
         try:
-            return mark(*args)
+            return original(*args)
         finally:
-            done.set()
+            order.append(method)
+            finished.set()
 
-    monkeypatch.setattr(service.engine, "encode", slow_encode)
-    monkeypatch.setattr(service, "mark", mark_then_signal)
+    def checking(*args):
+        order.append("check")
+        return check(*args)
+
+    monkeypatch.setattr(service, method, finishing)
+    if paused:
+        inner = getattr(service.engine, paused)
+        monkeypatch.setattr(service.engine, paused, lambda *args: (pause(), inner(*args))[1])
+    if tool == "mark_image":
+        monkeypatch.setattr(service, "check", checking)
+    arguments = {"image_path": str(source)} if tool != "list_copies" else {}
+    if recipients:
+        arguments["recipients"] = recipients
 
     async def session():
         async with create_connected_server_and_client_session(create_server(service)) as client:
-            request_id = client._request_id  # the id the next request will carry
-            outcome = []
+            with anyio.fail_after(20):
+                request_id = client._request_id  # the id the next request will carry
+                outcome, answered = [], anyio.Event()
 
-            async def mark_copies():
-                try:
-                    await client.call_tool(
-                        "mark_image", {"image_path": str(source), "recipients": ["alice", "bob"]}
+                async def call():
+                    try:
+                        await client.call_tool(tool, arguments)
+                    except McpError as error:
+                        outcome.append(error.error.message)
+                    answered.set()
+
+                async with anyio.create_task_group() as tasks:
+                    tasks.start_soon(call)
+                    await to_thread.run_sync(started.wait, 5)
+                    cancel = CancelledNotification(
+                        method="notifications/cancelled",
+                        params=CancelledNotificationParams(requestId=request_id),
                     )
-                except McpError as error:
-                    outcome.append(error.error.message)
-
-            async with anyio.create_task_group() as tasks:
-                tasks.start_soon(mark_copies)
-                await to_thread.run_sync(started.wait, 5)
-                cancel = CancelledNotification(
-                    method="notifications/cancelled",
-                    params=CancelledNotificationParams(requestId=request_id),
-                )
-                await client.send_notification(ClientNotification(cancel))
-                release.set()
-            await to_thread.run_sync(done.wait, 5)
-            return outcome, await client.call_tool("list_copies", {})
+                    await client.send_notification(ClientNotification(cancel))
+                    await answered.wait()
+                    if tool == "mark_image":  # another inference must wait for the abandoned one
+                        tasks.start_soon(
+                            client.call_tool, "check_image", {"image_path": str(other)}
+                        )
+                    release.set()
+                await to_thread.run_sync(finished.wait, 5)
+                return outcome, await client.call_tool("list_copies", {})
 
     outcome, listed = anyio.run(session)
     assert outcome == ["Request cancelled"]
     assert listed.structuredContent == {"copies": []}
-    assert list((source.parent / "marked").iterdir()) == []
+    assert not (source.parent / "marked").exists() or not list((source.parent / "marked").iterdir())
+    if tool == "mark_image":
+        assert order == ["mark", "check"]

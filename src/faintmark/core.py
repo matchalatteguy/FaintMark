@@ -241,6 +241,14 @@ class FaintMark:
         if not all(1 <= len(name) <= MAX_NAME and name.isprintable() for name in names):
             raise ValueError(f"recipient names must be 1 to {MAX_NAME} printable characters")
         source = Path(image).expanduser()
+
+        def checkpoint():
+            if cancelled and cancelled():
+                raise RuntimeError(
+                    f"{source.name}: cancelled; the copies written so far were removed"
+                )
+
+        checkpoint()
         cover, fmt, jpeg, icc = _read(source)
         target = format or DEFAULT_TARGET[fmt]
         attempts = {"jpeg": [jpeg, JPEG_Q95], "png": [{}], "webp": [{"quality": 90}]}[target]
@@ -257,13 +265,6 @@ class FaintMark:
         created = []
         copies = []
         hashes = []
-
-        def checkpoint():
-            if cancelled and cancelled():
-                raise RuntimeError(
-                    f"{source.name}: cancelled; the copies written so far were removed"
-                )
-
         with self._connect() as db:
             try:
                 for recipient in names:

@@ -53,17 +53,23 @@ jobs:
       - name: Check the packaged MCP server answers initialize
         run: |
           python3 - "$(ls dist/*.whl)" <<'PY'
-          import json, subprocess, sys, threading
+          import json, os, subprocess, sys, threading
           p = subprocess.Popen(["uvx", "--from", sys.argv[1], "faintmark", "mcp"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-          threading.Timer(180, p.kill).start()
-          p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-              "protocolVersion": "2025-06-18", "capabilities": {},
-              "clientInfo": {"name": "smoke", "version": "0"}}}) + "\n")
-          p.stdin.flush()
-          reply = json.loads(p.stdout.readline())
-          p.terminate()
-          assert reply["result"]["serverInfo"]["name"] == "FaintMark", reply
+          timer = threading.Timer(180, p.kill)
+          timer.start()
+          try:
+              p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                  "protocolVersion": "2025-06-18", "capabilities": {},
+                  "clientInfo": {"name": "smoke", "version": "0"}}}) + "\n")
+              p.stdin.flush()
+              reply = json.loads(p.stdout.readline())
+          finally:
+              timer.cancel()
+              p.terminate()
+              p.wait()
+          info = reply["result"]["serverInfo"]
+          assert (info["name"], info["version"]) == ("FaintMark", os.environ["GITHUB_REF_NAME"][1:]), reply
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: dist, path: dist/, if-no-files-found: error }
@@ -88,13 +94,17 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
-      # Rerun-safe: skip when the registry already lists this version; otherwise publish, and any failure still fails the job.
+      # Rerun-safe: skip when the registry already has this exact version; publish on 404; any other answer fails the job.
       - name: Publish to the MCP registry
         run: |
-          curl --fail -sL "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.matchalatteguy/faintmark" > registry.json
-          if jq -e --arg v "${GITHUB_REF_NAME#v}" '[.. | .version? // empty] | index($v)' registry.json >/dev/null; then
-            echo "registry already lists ${GITHUB_REF_NAME#v}; skipping"; exit 0
-          fi
+          version="${GITHUB_REF_NAME#v}"
+          name="$(jq -r .name server.json | jq -Rr @uri)"
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.modelcontextprotocol.io/v0.1/servers/$name/versions/$version")"
+          case "$code" in
+            200) echo "registry already lists $version; skipping"; exit 0 ;;
+            404) ;;
+            *) echo "registry lookup returned HTTP $code"; exit 1 ;;
+          esac
           curl --fail -sL -o mcp-publisher.tar.gz \
             https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
           echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher.tar.gz" | sha256sum -c

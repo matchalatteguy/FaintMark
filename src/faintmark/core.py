@@ -200,11 +200,10 @@ def _preflight(engine, saved, value):
     edge = 1280 if long > 1280 else max(1, long // 2)
     size = tuple(max(1, round(side * edge / long)) for side in saved.size)
     warnings = []
-    try:
-        if engine.decode(_jpeg70(saved)) != value:
-            warnings.append("may not survive JPEG recompression")
-    except OSError:  # libjpeg stops at 65500 pixels per side
+    if long > 65500:  # libjpeg's limit per side
         warnings.append("JPEG recompression not tested at full size: a side exceeds 65500px")
+    elif engine.decode(_jpeg70(saved)) != value:
+        warnings.append("may not survive JPEG recompression")
     if engine.decode(_jpeg70(saved.resize(size, Image.LANCZOS))) != value:
         warnings.append(f"may not survive resizing to {edge}px")
     return warnings
@@ -343,6 +342,8 @@ class FaintMark:
                 if found["status"] != "not_detected":
                     found["transform"] = name
                     return found
+            if cancelled and cancelled():
+                raise RuntimeError(f"{path.name}: cancelled")
             suspects, size = self._suspects(self.engine.raw_bits(rgb), rgb)
             result.update(suspects=suspects, registry_size=size)
         return result

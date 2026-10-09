@@ -26,13 +26,15 @@ def _parser():
         "mark", parents=[output], help="Create one invisibly marked copy per recipient."
     )
     mark.add_argument(
-        "image", help="JPEG, PNG, WebP or HEIC (needs faintmark[heic]), up to 25 megapixels"
+        "image",
+        help="JPEG, PNG, WebP or HEIC (needs faintmark[heic]) up to 25 megapixels; no "
+        "animation, transparency, CMYK or 16-bit grayscale",
     )
     mark.add_argument(
         "recipients",
         nargs="+",
         metavar="RECIPIENT",
-        help="one label per copy (1 to 100, each 1 to 200 characters)",
+        help="one label per copy (1 to 100, each 1 to 200 printable characters)",
     )
     mark.add_argument("-o", "--output", metavar="DIR", help="default: marked/ beside the image")
     mark.add_argument(

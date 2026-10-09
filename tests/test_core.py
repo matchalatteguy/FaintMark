@@ -373,6 +373,8 @@ def test_deep_check_undoes_a_flip_and_names_suspects(app, make_image, tmp_path):
         "suspects": [],
         "registry_size": 0,
     }
+    with pytest.raises(RuntimeError, match="^damaged.png: cancelled$"):
+        app.check(tmp_path / "damaged.png", deep=True, cancelled=lambda: True)
 
 
 def test_deep_check_keeps_an_unregistered_id_found_after_a_flip(app, make_image, tmp_path):

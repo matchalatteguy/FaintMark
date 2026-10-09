@@ -19,7 +19,7 @@ faintmark mark /abs/photo.jpg alice bob --json   # MCP: mark_image {"image_path"
 faintmark check /abs/received.jpg --json         # MCP: check_image {"image_path": "/abs/received.jpg"}
 # {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
 # {"status": "unregistered", "id": "3123f6f877"}  or  {"status": "not_detected"}
-faintmark list --json                            # MCP: list_copies {"limit": 2}
+faintmark list -n 2 --json                       # MCP: list_copies {"limit": 2}
 # {"copies": [{"id": "746ac9fa88", "recipient": "bob", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}, {"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
 ```
 
@@ -44,5 +44,5 @@ faintmark list --json                            # MCP: list_copies {"limit": 2}
   ids can be copied into other images. The mark can be removed by someone who knows it is there,
   so `not_detected` says nothing about where an image came from.
 - HEIC input needs the `heic` extra (`uvx --from 'faintmark[heic]' faintmark ...`). `mark` takes JPEG, PNG,
-  WebP or HEIC up to 25 MP with no animation, transparency, CMYK or 16-bit grayscale, and labels of 1 to 200
-  printable characters; `check` reads anything Pillow opens up to 100 MP.
+  WebP or HEIC up to 25 MP with no animation, transparency, CMYK or 16-bit grayscale, and 1 to 100 labels of
+  1 to 200 printable characters; `check` reads anything Pillow opens up to 100 MP.

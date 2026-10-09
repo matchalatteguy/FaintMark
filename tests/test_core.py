@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from PIL import Image, JpegImagePlugin
+from PIL import Image, JpegImagePlugin, UnidentifiedImageError
 
 from faintmark import engine
 from faintmark.core import FaintMark
@@ -240,8 +240,11 @@ def test_unsupported_registry_versions_are_refused(home, version):
 
 
 def test_heic_without_the_extra_is_explained(app, tmp_path, monkeypatch):
+    def unreadable(path):
+        raise UnidentifiedImageError
+
+    monkeypatch.setattr("faintmark.core.Image.open", unreadable)
     monkeypatch.delitem(Image.OPEN, "HEIF", raising=False)
-    (tmp_path / "photo.heic").write_bytes(b"not an image")
     with pytest.raises(ValueError, match=r"^photo.heic: HEIC needs the heic extra \(install"):
         app.check(tmp_path / "photo.heic")
 

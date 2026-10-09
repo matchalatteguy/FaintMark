@@ -32,8 +32,8 @@ faintmark list --json
   measurements. `--files` adds file names and paths; omit it unless needed. HEIC input is written as JPEG.
 - If a leaked copy returns `not_detected` and tampering is plausible, run `faintmark check IMAGE --deep --json`:
   it undoes flips and small rotations, and otherwise lists `suspects` (`id`, `recipient`, `bit_errors`,
-  `same_image`), the registered ids within 26 of 96 codeword bits of the raw decoder output, empty when
-  none is that close, and `registry_size`. Suspects are uncalibrated candidates: they can be coincidental
+  `same_image`), up to three registered ids within 26 of 96 codeword bits of the raw decoder output, empty
+  when none is that close, and `registry_size`. Suspects are uncalibrated candidates: they can be coincidental
   or forged. Say "the closest registered id is X, N bits away", never "X".
 - `unregistered` means a watermark was found but it is not in this machine's registry (`~/.faintmark`,
   or `FAINTMARK_HOME`); `not_detected` means no readable mark, for example after heavy downscaling or

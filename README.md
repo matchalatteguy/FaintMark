@@ -49,12 +49,12 @@ labels with spaces: `faintmark mark photo.jpg 'Alice Smith'`. One run marks 1
 to 100 recipients. `--json` prints the result the matching MCP tool returns;
 `mark` includes the source file name and output paths, `check` and `list` omit
 file names and paths unless `--files` is set. `check --deep` also tries a flip
-and small rotations, and when nothing is detected lists the registered ids
-within 26 of 96 codeword bits of the raw decoder output as candidates, with
-their bit distance. Those are uncalibrated and can be coincidental or forged;
-they are never a match. With `--json`, errors print `{"error": "..."}`.
-`check` exits 0 for `matched`, 1 for `unregistered` or `not_detected`, 2 for
-an error.
+and small rotations, and when nothing is detected lists up to three
+registered ids within 26 of 96 codeword bits of the raw decoder output as
+candidates, with their bit distance. Those are uncalibrated and can be
+coincidental or forged; they are never a match. With `--json`, errors print
+`{"error": "..."}`. `check` exits 0 for `matched`, 1 for `unregistered` or
+`not_detected`, 2 for an error.
 
 `mark` accepts non-animated JPEG, PNG, WebP and HEIC up to 25 megapixels
 without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
@@ -106,7 +106,7 @@ comparison can also miss differences.
 plain statuses; with `deep`, a result recovered by undoing a transform, or a
 miss with candidates (`suspects` is empty when no registered id is within the
 cutoff). The CLI prints errors as the last line; MCP tools raise them as tool
-errors with the same text.
+errors (`isError`) carrying the same message.
 
 ```
 {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}

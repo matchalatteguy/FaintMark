@@ -57,8 +57,8 @@ coincidental or forged; they are never a match. With `--json`, errors print
 `not_detected`, 2 for an error.
 
 `mark` accepts non-animated JPEG, PNG, WebP and HEIC up to 25 megapixels
-without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale is
-rejected) and needs about 1.5 GB of memory at that size. `check` reads the
+without transparency (16-bit RGB is read at 8 bits; 16-bit grayscale and CMYK
+are rejected) and needs about 1.5 GB of memory at that size. `check` reads the
 first frame of anything Pillow opens, up to 100 megapixels.
 
 ## Agents

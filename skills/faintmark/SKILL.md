@@ -11,7 +11,7 @@ copy with a unique invisible id, designed to survive chat-app recompression and 
 resizing. Nothing is uploaded. The first mark or check downloads 65 MB of models.
 
 When the FaintMark MCP server is configured, prefer its tools `mark_image`, `check_image` and
-`list_copies`; they take the same arguments and share the registry with the CLI.
+`list_copies`; they cover the same operations and share the registry with the CLI.
 
 ```sh
 faintmark mark /abs/photo.jpg alice bob --json     # copies in /abs/marked/, one per recipient

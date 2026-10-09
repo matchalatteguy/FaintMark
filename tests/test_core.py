@@ -64,6 +64,24 @@ def test_heic_becomes_jpeg(app, make_image):
     assert app.check(path)["recipient"] == "alice"
 
 
+@pytest.mark.parametrize("slot", [0, 1, 3])
+def test_grayscale_jpeg_keeps_its_single_table(app, tmp_path, slot):
+    source = tmp_path / "scan.jpg"
+    Image.fromarray(np.tile(np.linspace(0, 200, 128).astype(np.uint8), (96, 1))).save(
+        source, quality=80
+    )
+    data = bytearray(source.read_bytes())  # move the table: its id in DQT and in the SOF component
+    data[data.index(b"\xff\xdb") + 4] = data[data.index(b"\xff\xc0") + 12] = slot
+    source.write_bytes(data)
+    with Image.open(source) as original:
+        [table] = original.quantization.values()
+        assert list(original.quantization) == [slot]
+    copy = app.mark(source, ["alice"])["copies"][0]
+    with Image.open(copy["path"]) as saved:
+        assert (saved.mode, saved.quantization) == ("RGB", {0: table})
+    assert app.check(copy["path"])["recipient"] == "alice"
+
+
 def test_transparency_is_rejected_and_opaque_alpha_is_dropped(app, tmp_path):
     seethrough = Image.new("RGBA", (128, 96), (10, 20, 30, 255))
     seethrough.putpixel((5, 5), (10, 20, 30, 254))
@@ -170,6 +188,11 @@ def test_input_limits(app, make_image, tmp_path, monkeypatch):
     Image.new("I;16", (128, 96), 40000).save(tmp_path / "scan.png")
     with pytest.raises(ValueError, match="^scan.png: 16-bit images are not supported"):
         app.mark(tmp_path / "scan.png", ["alice"])
+    Image.new("CMYK", (128, 96)).save(tmp_path / "print.jpg")
+    with pytest.raises(
+        ValueError, match="^print.jpg: CMYK images are not supported; convert to RGB$"
+    ):
+        app.mark(tmp_path / "print.jpg", ["alice"])
     Image.new("P", (8, 8)).save(tmp_path / "icon.gif")
     with pytest.raises(ValueError, match=r"^icon.gif: unsupported format GIF; use JPEG, PNG"):
         app.mark(tmp_path / "icon.gif", ["alice"])

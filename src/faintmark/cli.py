@@ -36,9 +36,12 @@ def _parser():
     files.add_argument("--files", action="store_true", help="include file names and paths")
 
     check = commands.add_parser(
-        "check", parents=[output, files], help="Identify which copy an image is."
+        "check",
+        parents=[output, files],
+        help="Identify which copy an image is.",
+        epilog="exit status: 0 matched, 1 unregistered or not detected, 2 error",
     )
-    check.add_argument("image", help="any image Pillow can open")
+    check.add_argument("image", help="any image Pillow can open, up to 100 megapixels")
     check.add_argument(
         "--deep",
         action="store_true",
@@ -108,6 +111,8 @@ def _print_list(result):
         original = f"  {copy['original']}" if "original" in copy else ""
         path = f"  {copy['path']}" if "path" in copy else ""
         print(f"{copy['id']}  {copy['recipient']}{original}  {copy['marked_at']}{path}")
+        for warning in copy["warnings"]:
+            print(f"  warning: {warning}", file=sys.stderr)
     if not result["copies"]:
         print("no copies")
 

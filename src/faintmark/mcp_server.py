@@ -35,9 +35,9 @@ def create_server(service: FaintMark | None = None) -> FastMCP:
             "Create one invisibly watermarked copy of an image per recipient label and register "
             "them locally. Use before sharing a picture with several people so a copy that turns "
             "up later can be traced to the label it was issued under. Writes files only and sends "
-            "nothing; keeps the source format (JPEG stays JPEG). Accepts 8-bit JPEG, PNG, WebP or "
-            "HEIC (HEIC only when the server runs with the heic extra) up to 25 megapixels without "
-            "transparency, and 1 to 100 recipient labels. Returns the output folder and "
+            "nothing; keeps the source format (JPEG stays JPEG). Accepts JPEG, PNG, WebP or HEIC "
+            "(HEIC only when the server runs with the heic extra) up to 25 megapixels, without "
+            "transparency or CMYK, and 1 to 100 recipient labels. Returns the output folder and "
             "each copy's path, id and warnings. A warning starting with 'may not survive' means "
             "the copy is fragile, so suggest sending it as a file rather than a photo."
         ),

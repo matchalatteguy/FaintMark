@@ -15,12 +15,12 @@ When the FaintMark MCP server is configured, prefer its tools `mark_image`, `che
 
 ```sh
 faintmark mark /abs/photo.jpg alice bob --json     # copies in /abs/marked/, one per recipient
-# {"original": "photo.jpg", "output_dir": "/Users/me/Pictures/marked", "copies": [{"id": "991e318a21", "recipient": "alice", "path": "/Users/me/Pictures/marked/photo-991e318a21.jpg", "warnings": []}]}
+# {"original": "photo.jpg", "output_dir": "/abs/marked", "copies": [{"id": "991e318a21", "recipient": "alice", "path": "/abs/marked/photo-991e318a21.jpg", "warnings": []}, {"id": "746ac9fa88", "recipient": "bob", "path": "/abs/marked/photo-746ac9fa88.jpg", "warnings": []}]}
 faintmark check /abs/received.jpg --json           # status: matched | unregistered | not_detected
 # {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
 # {"status": "unregistered", "id": "3123f6f877"}  or  {"status": "not_detected"}
 faintmark list --json
-# {"copies": [{"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
+# {"copies": [{"id": "746ac9fa88", "recipient": "bob", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}, {"id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "warnings": []}]}
 ```
 
 - Writes files only, sends nothing. Send each person only their own file (`copies[].path`); file

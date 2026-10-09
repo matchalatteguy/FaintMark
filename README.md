@@ -105,7 +105,8 @@ comparison can also miss differences.
 `check_image` and `faintmark check --json` return one of these: the three
 plain statuses; with `deep`, a result recovered by undoing a transform, or a
 miss with candidates (`suspects` is empty when no registered id is within the
-cutoff); and an error.
+cutoff). The CLI prints errors as the last line; MCP tools raise them as tool
+errors with the same text.
 
 ```
 {"status": "matched", "id": "991e318a21", "recipient": "alice", "marked_at": "2026-10-06T23:11:54Z", "same_image": true}
@@ -138,7 +139,7 @@ round-trip observations, not recovery rates or guarantees for an app.
 | Telegram photo, scene | 960x1280, 102 KB | matched 1/1 |
 | WeChat photo, portrait and sunset | long edge 1644 to 1920 px, 67 to 302 KB | matched 2/2 |
 | Instagram DM, portrait | 1206x804, 176 KB | matched 1/1 |
-| Chat screenshots on WhatsApp, Discord, Telegram, WeChat, Instagram | photo area 215 to 1022 px | matched 9/9 |
+| Chat screenshots on WhatsApp, Discord, Telegram, WeChat, Instagram | photo long edge 286 to 1022 px | matched 9/9 |
 | Tinder profile card, portrait (screenshot) | heavy crop | not detected 0/1 |
 
 Every match also reported `same_image: true`. The originals, every received

@@ -218,7 +218,9 @@ class FaintMark:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             foreign = (
                 version == 0
-                and db.execute("SELECT 1 FROM sqlite_master WHERE name = 'copies'").fetchone()
+                and db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name = 'copies' COLLATE NOCASE"
+                ).fetchone()
             )
             if version not in (0, 3) or foreign:
                 raise ValueError(f"registry version {version} is not supported by this FaintMark")

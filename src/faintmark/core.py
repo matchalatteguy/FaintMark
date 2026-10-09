@@ -127,6 +127,8 @@ def _read(path):
             raise ValueError(f"{path.name}: larger than 25 megapixels")
         if image.mode in ("I", "F") or image.mode.startswith("I;16"):
             raise ValueError(f"{path.name}: 16-bit images are not supported; convert to 8-bit")
+        if image.mode == "CMYK":
+            raise ValueError(f"{path.name}: CMYK images are not supported; convert to RGB")
         if (
             image.has_transparency_data
             and image.convert("RGBA").getchannel("A").getextrema()[0] < 255
@@ -135,7 +137,7 @@ def _read(path):
         icc = image.info.get("icc_profile")
         icc = icc if icc and icc[16:20] == b"RGB " else None  # outputs are always RGB
         jpeg = JPEG_Q92
-        if fmt == "JPEG" and len(image.quantization) >= 2:
+        if fmt == "JPEG" and image.quantization:
             # qtables and quality are exclusive: quality would rescale the tables
             jpeg = {"qtables": image.quantization, "optimize": True}
             sampling = JpegImagePlugin.get_sampling(image)

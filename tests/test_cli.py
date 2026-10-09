@@ -48,8 +48,9 @@ def test_mark_check_and_list_human_output(home, make_image, capsys, tmp_path):
     assert code == 0 and f"  {alice[1]}  photo.png  marked " in out
     assert out.endswith(f"\n  issued copy: {alice[2]}\n")
 
-    code, out, _ = run(capsys, "list", "-n", 1)
+    code, out, err = run(capsys, "list", "-n", 1)
     assert (code, len(out.splitlines())) == (0, 1)
+    assert err == "  warning: may not survive resizing to 64px\n"
     assert out.startswith(f"{second.split()[1]}  bob  2")
     files = run(capsys, "list", "-n", 1, "--files")[1]
     assert files.startswith(f"{second.split()[1]}  bob  photo.png  ")

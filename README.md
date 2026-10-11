@@ -1,5 +1,8 @@
 # FaintMark
 
+[![CI](https://github.com/matchalatteguy/FaintMark/actions/workflows/ci.yml/badge.svg)](https://github.com/matchalatteguy/FaintMark/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/faintmark)](https://pypi.org/project/faintmark/)
+
 Invisible per-recipient image watermarks. Create one marked copy per recipient,
 then identify which copy a shared or leaked image is. Designed to tolerate the
 recompression and resizing chat apps apply; see the app tests and limits
